@@ -14,3 +14,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Orchestra Testbench + Pest test harness (`tests/TestCase.php`, `tests/Pest.php`, `phpunit.xml.dist`) covering provider auto-discovery, config defaults, and config publishing.
 - Static-analysis and code-style gate: PHPStan via Larastan at level 10 with no baseline (`phpstan.neon.dist`) and Laravel Pint on the default preset.
 - GitHub Actions CI: test matrix of PHP 8.2/8.4/8.5 × Filament 4/5 × Laravel 12/13 (sodium + openssl on every leg, Livewire v4 on Filament 5), plus PHPStan and Pint (`--test`) checks and a Pint auto-fix workflow.
+- MIT `LICENSE` and a placeholder `README.md` describing the read-only positioning and the requirements matrix.
