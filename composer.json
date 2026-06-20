@@ -1,0 +1,78 @@
+{
+  "name": "laravel-chronicle/filament",
+  "description": "Read-only Filament panel plugin for Chronicle - browse and cryptographically verify your tamper-evident audit ledger.",
+  "type": "library",
+  "license": "MIT",
+  "keywords": [
+    "laravel",
+    "filament",
+    "filament-plugin",
+    "audit log",
+    "audit trail",
+    "ledger",
+    "hash chain",
+    "verification",
+    "chronicle"
+  ],
+  "homepage": "https://github.com/laravel-chronicle/filament",
+  "support": {
+    "issues": "https://github.com/laravel-chronicle/filament/issues"
+  },
+  "authors": [
+    {
+      "name": "Vasileios Ntoufoudis",
+      "email": "info@ntoufoudis.com"
+    }
+  ],
+  "require": {
+    "php": "^8.2",
+    "ext-sodium": "*",
+    "ext-openssl": "*",
+    "filament/filament": "^4.0||^5.0",
+    "laravel-chronicle/core": "^1.13",
+    "spatie/laravel-package-tools": "^1.16"
+  },
+  "require-dev": {
+    "larastan/larastan": "^3.0",
+    "laravel/pint": "^1.14",
+    "orchestra/testbench": "^10.0||^11.0",
+    "pestphp/pest": "^3.0||^4.0",
+    "pestphp/pest-plugin-laravel": "^3.0||^4.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Chronicle\\Filament\\": "src"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Chronicle\\Filament\\Tests\\": "tests"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Chronicle\\Filament\\ChronicleFilamentServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    }
+  },
+  "scripts": {
+    "lint": "vendor/bin/pint",
+    "test:lint": "vendor/bin/pint --test",
+    "test:types": "vendor/bin/phpstan analyse",
+    "test:unit": "vendor/bin/pest",
+    "test": [
+      "@test:lint",
+      "@test:types",
+      "@test:unit"
+    ]
+  }
+}
