@@ -4,9 +4,22 @@ declare(strict_types=1);
 
 namespace Chronicle\Filament\Tests;
 
+use BladeUI\Heroicons\BladeHeroiconsServiceProvider;
+use BladeUI\Icons\BladeIconsServiceProvider;
 use Chronicle\ChronicleServiceProvider;
 use Chronicle\Filament\ChronicleFilamentServiceProvider;
+use Chronicle\Filament\Tests\Fixtures\TestPanelProvider;
+use Filament\Actions\ActionsServiceProvider;
+use Filament\FilamentServiceProvider;
+use Filament\Forms\FormsServiceProvider;
+use Filament\Infolists\InfolistsServiceProvider;
+use Filament\Notifications\NotificationsServiceProvider;
+use Filament\Schemas\SchemasServiceProvider;
+use Filament\Support\SupportServiceProvider;
+use Filament\Tables\TablesServiceProvider;
+use Filament\Widgets\WidgetsServiceProvider;
 use Illuminate\Support\Facades\Config;
+use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
@@ -17,8 +30,21 @@ abstract class TestCase extends Orchestra
     protected function getPackageProviders($app): array
     {
         return [
+            LivewireServiceProvider::class,
+            BladeIconsServiceProvider::class,
+            BladeHeroiconsServiceProvider::class,
+            SupportServiceProvider::class,
+            ActionsServiceProvider::class,
+            SchemasServiceProvider::class,
+            FormsServiceProvider::class,
+            InfolistsServiceProvider::class,
+            TablesServiceProvider::class,
+            NotificationsServiceProvider::class,
+            WidgetsServiceProvider::class,
+            FilamentServiceProvider::class,
             ChronicleServiceProvider::class,
             ChronicleFilamentServiceProvider::class,
+            TestPanelProvider::class,
         ];
     }
 

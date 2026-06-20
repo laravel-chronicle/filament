@@ -6,6 +6,7 @@ namespace Chronicle\Filament;
 
 use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Closure;
+use Filament\Clusters\Cluster;
 use Filament\Contracts\Plugin;
 use Filament\Facades\Filament;
 use Filament\Panel;
@@ -15,12 +16,15 @@ use UnitEnum;
 
 final class ChronicleFilamentPlugin implements Plugin
 {
-    protected string | UnitEnum | null $navigationGroup = null;
+    protected string|UnitEnum|null $navigationGroup = null;
 
     protected ?int $navigationSort = null;
 
     protected ?string $slug = null;
 
+    /**
+     * @var class-string<Cluster>|null
+     */
     protected ?string $cluster = null;
 
     protected ?bool $verification = null;
@@ -29,17 +33,26 @@ final class ChronicleFilamentPlugin implements Plugin
 
     protected ?Closure $labelResolver = null;
 
-    public static function make(): static
+    public static function make(): ChronicleFilamentPlugin
     {
-        return app(static::class);
+        return app(ChronicleFilamentPlugin::class);
     }
 
-    public static function get(): static
+    public static function get(): ChronicleFilamentPlugin
     {
-        /** @var static $plugin */
-        $plugin = Filament::getPlugin('chronicle-filament');
+        // Prefer the instance attached to the panel handling the current
+        // request; fall back to the shared container instance during boot
+        // and route registration, when no panel is "current" yet.
+        $panel = Filament::getCurrentPanel();
 
-        return $plugin;
+        if ($panel?->hasPlugin('chronicle-filament')) {
+            /** @var static $plugin */
+            $plugin = $panel->getPlugin('chronicle-filament');
+
+            return $plugin;
+        }
+
+        return app(ChronicleFilamentPlugin::class);
     }
 
     public function getId(): string
@@ -59,56 +72,59 @@ final class ChronicleFilamentPlugin implements Plugin
         //
     }
 
-    public function navigationGroup(string | UnitEnum | null $group): static
+    public function navigationGroup(string|UnitEnum|null $group): ChronicleFilamentPlugin
     {
         $this->navigationGroup = $group;
 
         return $this;
     }
 
-    public function navigationSort(?int $sort): static
+    public function navigationSort(?int $sort): ChronicleFilamentPlugin
     {
         $this->navigationSort = $sort;
 
         return $this;
     }
 
-    public function slug(string $slug): static
+    public function slug(string $slug): ChronicleFilamentPlugin
     {
         $this->slug = $slug;
 
         return $this;
     }
 
-    public function cluster(?string $cluster): static
+    /**
+     * @param  class-string<Cluster>|null  $cluster
+     */
+    public function cluster(?string $cluster): ChronicleFilamentPlugin
     {
         $this->cluster = $cluster;
 
         return $this;
     }
 
-    public function verification(bool $condition = true): static
+    public function verification(bool $condition = true): ChronicleFilamentPlugin
     {
         $this->verification = $condition;
 
         return $this;
     }
 
-    public function authorize(Closure $callback): static
+    public function authorize(Closure $callback): ChronicleFilamentPlugin
     {
         $this->authorizeUsing = $callback;
 
         return $this;
     }
 
-    public function labelResolver(Closure $callback): static
+    public function labelResolver(Closure $callback): ChronicleFilamentPlugin
     {
         $this->labelResolver = $callback;
 
         return $this;
     }
 
-    public function getNavigationGroup(): string | UnitEnum | null
+    public function getNavigationGroup(): string|UnitEnum|null
     {
         if ($this->navigationGroup !== null) {
             return $this->navigationGroup;
@@ -135,6 +151,9 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this->slug ?? Config::string('chronicle-filament.slug', 'chronicle-entries');
     }
 
+    /**
+     * @return class-string<Cluster>|null
+     */
     public function getCluster(): ?string
     {
         return $this->cluster;

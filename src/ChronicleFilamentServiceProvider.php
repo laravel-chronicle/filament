@@ -16,4 +16,12 @@ final class ChronicleFilamentServiceProvider extends PackageServiceProvider
             ->hasConfigFile()
             ->hasViews();
     }
+
+    public function packageRegistered(): void
+    {
+        // One shared plugin instance so a panel's fluent configuration is
+        // visible to the resource's static methods, which Filament invokes
+        // during boot/route registration when no panel is "current" yet.
+        $this->app->singleton(ChronicleFilamentPlugin::class);
+    }
 }
