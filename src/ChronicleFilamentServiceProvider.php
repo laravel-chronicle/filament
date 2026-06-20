@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Chronicle\Filament;
 
+use Chronicle\Entry\Entry;
+use Chronicle\Filament\Policies\EntryPolicy;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Gate;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -15,5 +19,21 @@ final class ChronicleFilamentServiceProvider extends PackageServiceProvider
             ->name('chronicle-filament')
             ->hasConfigFile()
             ->hasViews();
+    }
+
+    public function packageRegistered(): void
+    {
+        // One shared plugin instance so a panel's fluent configuration is
+        // visible to the resource's static methods, which Filament invokes
+        // during boot/route registration when no panel is "current" yet.
+        $this->app->singleton(ChronicleFilamentPlugin::class);
+    }
+
+    public function packageBooted(): void
+    {
+        /** @var class-string $model */
+        $model = Config::string('chronicle-filament.entry_model', Entry::class);
+
+        Gate::policy($model, EntryPolicy::class);
     }
 }

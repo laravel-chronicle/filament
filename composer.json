@@ -66,7 +66,7 @@
   },
   "scripts": {
     "lint": "vendor/bin/pint",
-    "test:lint": "vendor/bin/pint --test",
+    "test:lint": "vendor/bin/pint --test -v",
     "test:types": "vendor/bin/phpstan analyse",
     "test:unit": "vendor/bin/pest",
     "test": [
