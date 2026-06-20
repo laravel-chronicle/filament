@@ -1,0 +1,87 @@
+name: Run Tests
+
+on:
+  push:
+    paths:
+      - '**.php'
+      - '.github/workflows/run-tests.yml'
+      - 'phpunit.xml.dist'
+      - 'composer.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate composer.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 #v2
+        with:
+          php-version: 8.4
+          extensions: sodium, openssl
+      - run: composer validate --strict
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        php: ['8.2', '8.3', '8.4', '8.5']
+        laravel: ['12.*', '13.*']
+        filament: ['4.*', '5.*']
+        stability: [prefer-stable]
+        include:
+          - laravel: '12.*'
+            testbench: '10.*'
+          - laravel: '13.*'
+            testbench: '11.*'
+        exclude:
+          # Laravel 13 requires PHP >= 8.3 (matches core's exclude).
+          - laravel: '13.*'
+            php: '8.2'
+
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - F${{ matrix.filament }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 #v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: sodium, openssl
+          coverage: none
+
+      - name: Setup problem matchers
+        run: |
+          echo "::add-matcher::${{ runner.tool_cache }}/php.json"
+          echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
+
+      - name: Install dependencies
+        run: |
+          composer require \
+            "laravel/framework:${{ matrix.laravel }}" \
+            "orchestra/testbench:${{ matrix.testbench }}" \
+            "filament/filament:${{ matrix.filament }}" \
+            --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+
+      - name: List installed dependencies
+        run: composer show -D
+
+      - name: Assert Livewire v4 on Filament 5 legs
+        if: startsWith(matrix.filament, '5')
+        run: |
+          composer show livewire/livewire | tee /tmp/livewire.txt
+          grep -E '^versions\s*:\s*\*?\s*v?4\.' /tmp/livewire.txt
+
+      - name: Execute tests
+        run: vendor/bin/pest --ci
