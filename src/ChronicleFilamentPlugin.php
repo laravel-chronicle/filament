@@ -177,4 +177,15 @@ final class ChronicleFilamentPlugin implements Plugin
 
         return (bool) ($this->authorizeUsing)($record);
     }
+
+    public function resolveLabel(string $type, string $id): ?string
+    {
+        if ($this->labelResolver === null) {
+            return null;
+        }
+
+        $label = ($this->labelResolver)($type, $id);
+
+        return is_string($label) && $label !== '' ? $label : null;
+    }
 }

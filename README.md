@@ -17,6 +17,12 @@ being able to rewrite history.
 - `laravel-chronicle/core` 1.13+
 - `ext-sodium` and `ext-openssl`
 
+## Theming
+
+The panel uses Filament's native CSS variables and utility classes only - no npm,
+no asset compilation, and no required custom theme. It adopts your panel's primary
+color and dark-mode settings automatically.
+
 ## License
 
 The MIT License (MIT). See [LICENSE](LICENSE).
