@@ -17,12 +17,14 @@ use Filament\Forms\FormsServiceProvider;
 use Filament\Infolists\InfolistsServiceProvider;
 use Filament\Notifications\NotificationsServiceProvider;
 use Filament\Schemas\SchemasServiceProvider;
+use Filament\Support\Livewire\Partials\DataStoreOverride;
 use Filament\Support\SupportServiceProvider;
 use Filament\Tables\TablesServiceProvider;
 use Filament\Widgets\WidgetsServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Livewire\LivewireServiceProvider;
+use Livewire\Mechanisms\DataStore;
 use Orchestra\Testbench\TestCase as Orchestra;
 use ReflectionClass;
 use Throwable;
@@ -30,6 +32,20 @@ use Throwable;
 abstract class TestCase extends Orchestra
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Filament's SupportServiceProvider re-binds Livewire's DataStore to its
+        // own override with a non-shared bind(), which (registered after
+        // LivewireServiceProvider) drops Livewire's shared instance. Livewire's
+        // store() then resolves a fresh DataStore - and a fresh component-state
+        // WeakMap - on every call, so per-component state (e.g. the validation
+        // error bag) never persists and rendering throws. Re-bind the override
+        // as a singleton so component state is shared, as it is at runtime.
+        $this->app->singleton(DataStore::class, DataStoreOverride::class);
+    }
 
     /**
      * @return array<int, class-string>
@@ -57,6 +73,10 @@ abstract class TestCase extends Orchestra
 
     public function getEnvironmentSetUp($app): void
     {
+        // Rendering the Livewire/Filament surface boots the encrypter (cookies,
+        // sessions), which requires an application key.
+        Config::set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+
         Config::set('database.default', 'testing');
         Config::set('database.connections.testing', [
             'driver' => 'sqlite',
