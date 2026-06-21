@@ -6,6 +6,7 @@ namespace Chronicle\Filament;
 
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\Policies\EntryPolicy;
+use Chronicle\Filament\Support\VerificationResultStore;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
 use Spatie\LaravelPackageTools\Package;
@@ -28,6 +29,7 @@ final class ChronicleFilamentServiceProvider extends PackageServiceProvider
         // visible to the resource's static methods, which Filament invokes
         // during boot/route registration when no panel is "current" yet.
         $this->app->singleton(ChronicleFilamentPlugin::class);
+        $this->app->singleton(VerificationResultStore::class);
     }
 
     public function packageBooted(): void
