@@ -18,7 +18,8 @@ final class ChronicleFilamentServiceProvider extends PackageServiceProvider
         $package
             ->name('chronicle-filament')
             ->hasConfigFile()
-            ->hasViews();
+            ->hasViews()
+            ->hasMigration('create_chronicle_filament_verification_records_table');
     }
 
     public function packageRegistered(): void
