@@ -283,7 +283,7 @@ class ChronicleEntryResource extends Resource
                     KeyValueEntry::make('payload')
                         ->state(fn (Entry $record): array => array_map(
                             static fn (mixed $value): string => match (true) {
-                                $value === null => '—',
+                                $value === null => '-',
                                 is_scalar($value) => (string) $value,
                                 default => (string) json_encode($value, JSON_UNESCAPED_SLASHES),
                             },
