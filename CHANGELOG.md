@@ -35,3 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Header "Verify chain" action: runs core's `IntegrityVerifier` over the full ledger, recording the result to the store. Runs synchronously below `verification.queue_threshold` and dispatches a queued `VerifyLedgerJob` above it, notifying the initiating user on completion. Gated behind the plugin `->authorize` closure.
 - Bulk "Verify segment" action: reduces the selection to `[minSequence, maxSequence]` and calls core's `IntegrityVerifier::verifyEntryRange()` (CORE-B) - which anchors on the enclosing signed checkpoints, never a selected row's stored hash. Detects a tampered row inside the span (records `failed` with the first-failing entry id), runs sync below the queue threshold and queues above it. Gated behind the plugin `->authorize` closure.
 - `VerificationHealthWidget`: a stats widget on the list page showing the chain's stored status and last-verified time plus a cheap `CheckpointChainVerifier` spine check (O(#checkpoints), no full re-hash on load). Surfaces the first detected gap rather than re-walking every entry.
+
+### Tests
+
+- Verification badge column now has rendered-badge coverage for every stored status - `Failed` (tampered + verified), `Unverified` (no record), and `Stale` (chain head advanced past the verified point) - not just `Verified`.
