@@ -21,8 +21,21 @@ it('does not run a full integrity re-hash on widget load', function () {
     $this->seedLedger(count: 5, checkpointEvery: 5);
 
     // The widget may run the O(#checkpoints) CheckpointChainVerifier, but must
-    // never trigger a full IntegrityVerifier re-hash on render.
-    $this->mock(IntegrityVerifier::class)->shouldNotReceive('verify')->shouldNotReceive('verifyEntryRange');
+    // never trigger a full IntegrityVerifier re-hash on render. IntegrityVerifier
+    // is final and cannot be Mockery-mocked, so bind a container spy that blows up
+    // if the widget ever resolves and calls it during render.
+    $this->app->bind(IntegrityVerifier::class, fn () => new class
+    {
+        public function verify(): never
+        {
+            throw new RuntimeException('IntegrityVerifier::verify() must not run during widget render');
+        }
+
+        public function verifyEntryRange(int $fromSequence, int $toSequence): never
+        {
+            throw new RuntimeException('IntegrityVerifier::verifyEntryRange() must not run during widget render');
+        }
+    });
 
     Livewire::test(VerificationHealthWidget::class)->assertOk();
 });

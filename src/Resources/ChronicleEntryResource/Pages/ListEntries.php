@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Chronicle\Filament\Resources\ChronicleEntryResource\Pages;
 
+use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
@@ -26,13 +27,22 @@ class ListEntries extends ListRecords
 {
     protected static string $resource = ChronicleEntryResource::class;
 
+    /**
+     * @return Collection<int, Model>|Paginator<int, Model>|CursorPaginator<int, Model>
+     */
     public function getTableRecords(): Collection|Paginator|CursorPaginator
     {
         $records = parent::getTableRecords();
 
-        app(VerificationResultStore::class)->primeEntries(
-            collect($records->items() ?? $records->all())->map(fn ($record) => (string) $record->getKey()),
-        );
+        $ids = [];
+
+        foreach ($records instanceof Collection ? $records->all() : $records->items() as $record) {
+            if ($record instanceof Entry) {
+                $ids[] = $record->id;
+            }
+        }
+
+        app(VerificationResultStore::class)->primeEntries($ids);
 
         return $records;
     }
@@ -51,7 +61,8 @@ class ListEntries extends ListRecords
                 ->action(function (): void {
                     /** @var class-string<Model> $model */
                     $model = ChronicleEntryResource::getModel();
-                    $count = (int) $model::query()->max('sequence');
+                    $maxSequence = $model::query()->max('sequence');
+                    $count = is_numeric($maxSequence) ? (int) $maxSequence : 0;
                     $threshold = Config::integer('chronicle-filament.verification.queue_threshold', 1000);
 
                     if ($count > $threshold) {
@@ -74,7 +85,7 @@ class ListEntries extends ListRecords
 
                     $result->isValid()
                         ? $notification->success()->send()
-                        : $notification->danger()->body('Failure: '.(VerificationFailure::tryFrom((string) $result->failureType())?->name ?? 'unknown'))->send();
+                        : $notification->danger()->body('Failure: '.(VerificationFailure::tryFrom((string) $result->failureType())->name ?? 'unknown'))->send();
                 }),
         ];
     }

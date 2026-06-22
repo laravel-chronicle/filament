@@ -22,8 +22,29 @@ it('shows a verified badge for an entry recorded as verified', function () {
 it('does not invoke any verifier while rendering the table', function () {
     $this->seedLedger(checkpointEvery: 5);
 
-    $this->mock(IntegrityVerifier::class)->shouldNotReceive('verify')->shouldNotReceive('verifyEntryRange');
-    $this->mock(EntryVerifier::class)->shouldNotReceive('verify');
+    // IntegrityVerifier and EntryVerifier are final and cannot be Mockery-mocked,
+    // so bind container spies that blow up if rendering ever resolves and calls
+    // them. The table must read verification state from the store, never verify.
+    $this->app->bind(IntegrityVerifier::class, fn () => new class
+    {
+        public function verify(): never
+        {
+            throw new RuntimeException('IntegrityVerifier::verify() must not run during table render');
+        }
+
+        public function verifyEntryRange(int $fromSequence, int $toSequence): never
+        {
+            throw new RuntimeException('IntegrityVerifier::verifyEntryRange() must not run during table render');
+        }
+    });
+
+    $this->app->bind(EntryVerifier::class, fn () => new class
+    {
+        public function verify(string $id): never
+        {
+            throw new RuntimeException('EntryVerifier::verify() must not run during table render');
+        }
+    });
 
     Livewire::test(ListEntries::class)->assertOk();
 });

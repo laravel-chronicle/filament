@@ -29,7 +29,7 @@ class VerifyLedgerJob implements ShouldQueue
         public readonly string $mode,           // chain | segment
         public readonly ?int $fromSequence,
         public readonly ?int $toSequence,
-        public readonly ?int $notifyUserId,
+        public readonly int|string|null $notifyUserId,
         public readonly string $chainKey = 'default',
     ) {
         //
@@ -66,7 +66,7 @@ class VerifyLedgerJob implements ShouldQueue
 
         $result->isValid()
             ? $notification->success()
-            : $notification->danger()->body('Failure: '.(VerificationFailure::tryFrom((string) $result->failureType())?->name ?? 'unknown'));
+            : $notification->danger()->body('Failure: '.(VerificationFailure::tryFrom((string) $result->failureType())->name ?? 'unknown'));
 
         $notification->sendToDatabase($user);
     }
@@ -77,6 +77,6 @@ class VerifyLedgerJob implements ShouldQueue
             return null;
         }
 
-        return Auth::getProvider()?->retrieveById($this->notifyUserId);
+        return Auth::getProvider()->retrieveById($this->notifyUserId);
     }
 }

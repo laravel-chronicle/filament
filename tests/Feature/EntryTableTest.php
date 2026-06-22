@@ -6,6 +6,7 @@ use Chronicle\Entry\Entry;
 use Chronicle\Facades\Chronicle;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
+use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -61,6 +62,17 @@ it('has no mutating row or bulk actions', function () {
         app(Table::class, ['livewire' => new ListEntries])
     );
 
-    // Read-only: no delete/edit row actions, no bulk actions.
-    expect($table->getToolbarActions())->toBe([]);
+    // Read-only ledger: the resource never permits create/edit/delete. The only
+    // bulk action is the non-mutating segment verification added in CHF-10.
+    $bulkActionNames = collect($table->getToolbarActions())
+        ->flatMap(fn ($action) => $action instanceof BulkActionGroup ? $action->getActions() : [$action])
+        ->map(fn ($action) => $action->getName())
+        ->values()
+        ->all();
+
+    expect($bulkActionNames)->toBe(['verifySegment']);
+
+    expect(ChronicleEntryResource::canCreate())->toBeFalse()
+        ->and(ChronicleEntryResource::canEdit(new Entry))->toBeFalse()
+        ->and(ChronicleEntryResource::canDelete(new Entry))->toBeFalse();
 });

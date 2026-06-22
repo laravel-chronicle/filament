@@ -161,9 +161,9 @@ class ChronicleEntryResource extends Resource
                 TextColumn::make('verification_status')
                     ->label('Verified')
                     ->badge()
-                    ->state(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->getKey())->label())
-                    ->color(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->getKey())->color())
-                    ->icon(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->getKey())->icon())
+                    ->state(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->id)->label())
+                    ->color(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->id)->color())
+                    ->icon(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->id)->icon())
                     ->tooltip(fn (Entry $record): ?string => static::verificationTooltip($record))
                     ->toggleable(),
             ])
@@ -250,8 +250,8 @@ class ChronicleEntryResource extends Resource
                     ->icon('heroicon-o-shield-check')
                     ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->canVerify($record))
                     ->action(function (Entry $record): void {
-                        $result = app(EntryVerifier::class)->verify($record->getKey());
-                        app(VerificationResultStore::class)->recordEntry($record->getKey(), $result);
+                        $result = app(EntryVerifier::class)->verify($record->id);
+                        app(VerificationResultStore::class)->recordEntry($record->id, $result);
 
                         $notification = Notification::make()
                             ->title($result->isValid() ? 'Entry verified' : 'Entry verification failed');
@@ -259,7 +259,7 @@ class ChronicleEntryResource extends Resource
                         $result->isValid()
                             ? $notification->success()->send()
                             : $notification->danger()->body(
-                                'Failure: '.(VerificationFailure::tryFrom((string) $result->failureCode())?->name ?? 'unknown'),
+                                'Failure: '.(VerificationFailure::tryFrom((string) $result->failureCode())->name ?? 'unknown'),
                             )->send();
                     }),
             ])
@@ -272,9 +272,20 @@ class ChronicleEntryResource extends Resource
                         ->deselectRecordsAfterCompletion()
                         ->visible(fn (): bool => ChronicleFilamentPlugin::get()->canVerify())
                         ->action(function (Collection $records): void {
-                            $sequences = $records->map(fn (Entry $record): int => (int) $record->sequence);
-                            $min = (int) $sequences->min();
-                            $max = (int) $sequences->max();
+                            $sequences = [];
+
+                            foreach ($records as $record) {
+                                if ($record instanceof Entry) {
+                                    $sequences[] = $record->sequence;
+                                }
+                            }
+
+                            if ($sequences === []) {
+                                return;
+                            }
+
+                            $min = min($sequences);
+                            $max = max($sequences);
                             $span = $max - $min + 1;
                             $threshold = Config::integer('chronicle-filament.verification.queue_threshold', 1000);
 
@@ -299,7 +310,7 @@ class ChronicleEntryResource extends Resource
                             $result->isValid()
                                 ? $notification->success()->send()
                                 : $notification->danger()->body(
-                                    'First failure at entry '.((string) $result->entryId()).': '.(VerificationFailure::tryFrom((string) $result->failureType())?->name ?? 'unknown'),
+                                    'First failure at entry '.((string) $result->entryId()).': '.(VerificationFailure::tryFrom((string) $result->failureType())->name ?? 'unknown'),
                                 )->send();
                         }),
                 ]),
@@ -424,7 +435,7 @@ class ChronicleEntryResource extends Resource
     protected static function verificationTooltip(Entry $record): ?string
     {
         $store = app(VerificationResultStore::class);
-        $entryRecord = $store->entryRecord($record->getKey());
+        $entryRecord = $store->entryRecord($record->id);
 
         if ($entryRecord === null) {
             return null;
