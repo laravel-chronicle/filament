@@ -8,11 +8,13 @@ use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Chronicle\Filament\Support\VerificationResultStore;
+use Chronicle\Filament\Widgets\VerificationHealthWidget;
 use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Widgets\Widget;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Model;
@@ -74,6 +76,16 @@ class ListEntries extends ListRecords
                         ? $notification->success()->send()
                         : $notification->danger()->body('Failure: '.(VerificationFailure::tryFrom((string) $result->failureType())?->name ?? 'unknown'))->send();
                 }),
+        ];
+    }
+
+    /**
+     * @return array<class-string<Widget>>
+     */
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            VerificationHealthWidget::class,
         ];
     }
 }
