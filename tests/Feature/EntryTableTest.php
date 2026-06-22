@@ -55,6 +55,22 @@ it('filters by action', function () {
         ->assertCanNotSeeTableRecords(Entry::query()->where('action', '!=', 'invoice.paid')->get());
 });
 
+it('filters by a recorded date range', function () {
+    $this->seedLedger(count: 3, checkpointEvery: 3);
+
+    // Shift one entry far into the past so a bounded range excludes it.
+    $old = Entry::query()->where('sequence', 1)->firstOrFail();
+    DB::table($old->getTable())->where('id', $old->id)->update([
+        'created_at' => '2000-01-01 00:00:00',
+    ]);
+
+    Livewire::test(ListEntries::class)
+        ->loadTable()
+        ->filterTable('recorded', ['from' => '2020-01-01', 'until' => '2999-01-01'])
+        ->assertCanSeeTableRecords(Entry::query()->where('sequence', '!=', 1)->get())
+        ->assertCanNotSeeTableRecords([$old]);
+});
+
 it('has no mutating row or bulk actions', function () {
     $this->seedLedger(count: 2);
 
@@ -70,9 +86,8 @@ it('has no mutating row or bulk actions', function () {
         ->values()
         ->all();
 
-    expect($bulkActionNames)->toBe(['verifySegment']);
-
-    expect(ChronicleEntryResource::canCreate())->toBeFalse()
+    expect($bulkActionNames)->toBe(['verifySegment'])
+        ->and(ChronicleEntryResource::canCreate())->toBeFalse()
         ->and(ChronicleEntryResource::canEdit(new Entry))->toBeFalse()
         ->and(ChronicleEntryResource::canDelete(new Entry))->toBeFalse();
 });

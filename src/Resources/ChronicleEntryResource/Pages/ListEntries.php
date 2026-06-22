@@ -23,11 +23,19 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 
+/**
+ * The entry browse page. Primes the verification result store once per render so
+ * status badges stay query-free, hosts the "Verify chain" header action (sync or
+ * queued), and mounts the verification health widget.
+ */
 class ListEntries extends ListRecords
 {
     protected static string $resource = ChronicleEntryResource::class;
 
     /**
+     * Load the page of records and prime the verification result store for them
+     * in a single query, so status badges render without per-row lookups.
+     *
      * @return Collection<int, Model>|Paginator<int, Model>|CursorPaginator<int, Model>
      */
     public function getTableRecords(): Collection|Paginator|CursorPaginator
@@ -48,6 +56,10 @@ class ListEntries extends ListRecords
     }
 
     /**
+     * The gated "Verify chain" header action: runs the full-ledger verifier
+     * synchronously below the queue threshold and dispatches a queued job above
+     * it, recording the outcome to the store.
+     *
      * @return array<Action>
      */
     protected function getHeaderActions(): array

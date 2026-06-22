@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
@@ -19,6 +21,20 @@ it('verifies the chain synchronously below the queue threshold', function () {
         ->callAction('verifyChain');
 
     expect(app(VerificationResultStore::class)->chainState())->toBe(VerificationState::Verified);
+});
+
+it('records a failed chain when a row is tampered', function () {
+    Config::set('chronicle-filament.verification.queue_threshold', 1000);
+    $this->seedLedger(count: 6, checkpointEvery: 6);
+
+    // Tamper a hashed column directly so the recomputed chain no longer matches.
+    $victim = Entry::query()->where('sequence', 3)->firstOrFail();
+    DB::table($victim->getTable())->where('id', $victim->id)->update(['payload' => json_encode(['tampered' => true])]);
+
+    Livewire::test(ListEntries::class)
+        ->callAction('verifyChain');
+
+    expect(app(VerificationResultStore::class)->chainState())->toBe(VerificationState::Failed);
 });
 
 it('dispatches the chain verification to the queue above the threshold', function () {
@@ -33,7 +49,7 @@ it('dispatches the chain verification to the queue above the threshold', functio
 });
 
 it('records a verified chain when the queued job runs', function () {
-    $this->seedLedger(count: 5, checkpointEvery: 5);
+    $this->seedLedger(checkpointEvery: 5);
 
     (new VerifyLedgerJob('chain', null, null, null))->handle();
 

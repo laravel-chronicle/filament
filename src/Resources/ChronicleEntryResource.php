@@ -43,6 +43,12 @@ use Stringable;
 use UnitEnum;
 
 /**
+ * The read-only Filament resource for the Chronicle audit ledger: browse and
+ * view entries, filter by action/actor/subject/date/verification state, and run
+ * the gated verify actions (entry, chain, segment). Every mutation ability is
+ * hard-denied and no Create/Edit pages exist, so the panel can never rewrite
+ * history.
+ *
  * @extends resource<Entry>
  */
 class ChronicleEntryResource extends Resource
@@ -131,6 +137,11 @@ class ChronicleEntryResource extends Resource
         return false;
     }
 
+    /**
+     * The entry browse table: columns, filters (including verification state),
+     * and the gated verify actions (per-row, and segment as a bulk action).
+     * Defaults to newest-first and defers loading.
+     */
     public static function table(Table $table): Table
     {
         return $table
@@ -155,9 +166,7 @@ class ChronicleEntryResource extends Resource
                     ->state(fn (Entry $record): string => ReferenceLabel::for($record->actor_type, $record->actor_id)),
                 TextColumn::make('subject')
                     ->label('Subject')
-                    ->state(fn (Entry $record): string => $record->subject_type === null
-                        ? '-'
-                        : ReferenceLabel::for($record->subject_type, (string) $record->subject_id)),
+                    ->state(fn (Entry $record): string => ReferenceLabel::for((string) $record->subject_type, (string) $record->subject_id)),
                 TextColumn::make('verification_status')
                     ->label('Verified')
                     ->badge()
@@ -328,11 +337,20 @@ class ChronicleEntryResource extends Resource
         ];
     }
 
+    /**
+     * Eager-load each entry's checkpoint so signature/anchor fields render
+     * without per-row queries.
+     */
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with('checkpoint');
     }
 
+    /**
+     * The read-only entry detail infolist: collapsible Identity, Integrity,
+     * Signature, Payload, and Decrypted sections, rendered through the model's
+     * decrypted accessors with an erased-subject indicator.
+     */
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
@@ -349,9 +367,7 @@ class ChronicleEntryResource extends Resource
                         ->state(fn (Entry $record): string => ReferenceLabel::for($record->actor_type, $record->actor_id)),
                     TextEntry::make('subject')
                         ->label('Subject')
-                        ->state(fn (Entry $record): string => $record->subject_type === null
-                            ? '-'
-                            : ReferenceLabel::for($record->subject_type, (string) $record->subject_id)),
+                        ->state(fn (Entry $record): string => ReferenceLabel::for((string) $record->subject_type, (string) $record->subject_id)),
                     TextEntry::make('tags')
                         ->badge()
                         ->state(fn (Entry $record): array => $record->tags ?? []),
@@ -432,6 +448,10 @@ class ChronicleEntryResource extends Resource
         return (string) json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
+    /**
+     * Build the verification badge tooltip from the stored record: last-verified
+     * time plus the decoded failure case, or null when the entry is unverified.
+     */
     protected static function verificationTooltip(Entry $record): ?string
     {
         $store = app(VerificationResultStore::class);

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Chronicle\Filament\Support;
 
+/**
+ * The verification state of a chain, segment, or entry - the single source of
+ * truth for badge color, icon, and label across the table, filter, and health
+ * widget.
+ */
 enum VerificationState: string
 {
     case Verified = 'verified';

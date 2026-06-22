@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Chronicle\Filament\ChronicleFilamentPlugin;
+use Filament\Facades\Filament;
 
 it('exposes a stable id', function () {
     expect(ChronicleFilamentPlugin::make()->getId())->toBe('chronicle-filament');
@@ -41,4 +42,20 @@ it('gates verification via the authorize closure, allowing by default', function
 
     $denied = ChronicleFilamentPlugin::make()->authorize(fn () => false);
     expect($denied->canVerify())->toBeFalse();
+});
+
+it('resolves the plugin attached to the current panel', function () {
+    $panel = Filament::getPanel('admin');
+    Filament::setCurrentPanel($panel);
+
+    expect(ChronicleFilamentPlugin::get())->toBe($panel->getPlugin('chronicle-filament'));
+});
+
+it('boots a panel without registering anything extra', function () {
+    $panel = Filament::getPanel('admin');
+
+    // boot() is a no-op hook; assert it runs cleanly for coverage of the contract.
+    ChronicleFilamentPlugin::make()->boot($panel);
+
+    expect($panel->getPlugin('chronicle-filament'))->toBeInstanceOf(ChronicleFilamentPlugin::class);
 });

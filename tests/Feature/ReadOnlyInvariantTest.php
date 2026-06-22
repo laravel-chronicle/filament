@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
+use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
+use Livewire\Livewire;
 
 it('exposes no mutating routes for the resource', function () {
     $mutating = ['create', 'edit', 'delete'];
@@ -24,4 +26,20 @@ it('denies mutation at both the resource and the Gate layer', function () {
         ->and(ChronicleEntryResource::canDelete($entry))->toBeFalse()
         ->and(Gate::denies('update', $entry))->toBeTrue()
         ->and(Gate::denies('delete', $entry))->toBeTrue();
+});
+
+it('exposes no header actions on the view page', function () {
+    $this->seedLedger(count: 2, checkpointEvery: 2);
+    $entry = Entry::query()->where('sequence', 1)->firstOrFail();
+
+    $page = Livewire::test(ViewEntry::class, ['record' => $entry->getKey()])
+        ->assertOk()
+        ->instance();
+
+    // getHeaderActions() is protected; reach it via reflection. The detail page
+    // is strictly read-only: no header action may ever be added.
+    $headerActions = (new ReflectionMethod($page, 'getHeaderActions'))->invoke($page);
+
+    expect($headerActions)
+        ->toBe([], 'a header action was added to ViewEntry - the read-only invariant is broken');
 });

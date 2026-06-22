@@ -8,6 +8,10 @@ use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
 
+/**
+ * The read-only entry detail page. Renders the infolist defined on the resource
+ * and exposes no header actions - the detail view can never mutate an entry.
+ */
 class ViewEntry extends ViewRecord
 {
     protected static string $resource = ChronicleEntryResource::class;

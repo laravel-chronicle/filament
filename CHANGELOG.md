@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-22
+
+`laravel-chronicle/filament` v1.0 - a read-only Filament v4/v5 panel for
+`laravel-chronicle/core` 1.13+: browse the tamper-evident audit ledger and deliberately
+verify it across the whole chain, a single entry, or a selected segment, with results
+surfaced as status badges and a health widget. The panel can never rewrite history.
+
 ### Added
 
 - Package manifest (`composer.json`) for `laravel-chronicle/filament`: PHP 8.2+, Filament 4/5, Laravel 12/13, `laravel-chronicle/core` ^1.13, with Pest/PHPStan/Pint tooling and `composer test` scripts.
@@ -35,3 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Header "Verify chain" action: runs core's `IntegrityVerifier` over the full ledger, recording the result to the store. Runs synchronously below `verification.queue_threshold` and dispatches a queued `VerifyLedgerJob` above it, notifying the initiating user on completion. Gated behind the plugin `->authorize` closure.
 - Bulk "Verify segment" action: reduces the selection to `[minSequence, maxSequence]` and calls core's `IntegrityVerifier::verifyEntryRange()` (CORE-B) - which anchors on the enclosing signed checkpoints, never a selected row's stored hash. Detects a tampered row inside the span (records `failed` with the first-failing entry id), runs sync below the queue threshold and queues above it. Gated behind the plugin `->authorize` closure.
 - `VerificationHealthWidget`: a stats widget on the list page showing the chain's stored status and last-verified time plus a cheap `CheckpointChainVerifier` spine check (O(#checkpoints), no full re-hash on load). Surfaces the first detected gap rather than re-walking every entry.
+- README rewritten for v1.0: positioning lead (read-only, cannot rewrite history, the only Filament audit plugin with chain/entry/segment cryptographic verification), install + panel-registration snippet, full config reference (`entry_model`, navigation, slug, `verification.enabled`/`queue_threshold`/`store.connection`), compatibility matrix (PHP 8.2/8.4/8.5, Filament 4 & 5, Laravel 12 & 13, core 1.13+, `ext-sodium`/`ext-openssl` required), and screenshot placeholders.
+- Hardened the v1.0 test sweep: rendered-badge coverage for every stored status, a read-vs-verify separation guard, a `ViewEntry` no-header-action guard, and a confirmed-green gate (full Pest suite + PHPStan level 10 + Pint) across the CI matrix.
+
+[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/laravel-chronicle/filament/releases/tag/1.0.0

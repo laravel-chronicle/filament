@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\Gate;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
+/**
+ * Boots the package: publishes config, views, and the verification-records
+ * migration; binds the shared plugin and verification result store as
+ * singletons; and registers the read-only EntryPolicy for the configured
+ * entry model.
+ */
 final class ChronicleFilamentServiceProvider extends PackageServiceProvider
 {
     public function configurePackage(Package $package): void
@@ -23,6 +29,9 @@ final class ChronicleFilamentServiceProvider extends PackageServiceProvider
             ->hasMigration('create_chronicle_filament_verification_records_table');
     }
 
+    /**
+     * Bind the plugin and verification result store as shared singletons.
+     */
     public function packageRegistered(): void
     {
         // One shared plugin instance so a panel's fluent configuration is
@@ -32,6 +41,9 @@ final class ChronicleFilamentServiceProvider extends PackageServiceProvider
         $this->app->singleton(VerificationResultStore::class);
     }
 
+    /**
+     * Register the read-only EntryPolicy against the configured entry model.
+     */
     public function packageBooted(): void
     {
         /** @var class-string $model */

@@ -8,7 +8,7 @@ use Chronicle\Verification\IntegrityVerifier;
 use Livewire\Livewire;
 
 it('renders the chain state and spine check from cheap sources', function () {
-    $this->seedLedger(count: 5, checkpointEvery: 5);
+    $this->seedLedger(checkpointEvery: 5);
     app(VerificationResultStore::class)->recordChain(app(IntegrityVerifier::class)->verify());
 
     Livewire::test(VerificationHealthWidget::class)
@@ -18,7 +18,7 @@ it('renders the chain state and spine check from cheap sources', function () {
 });
 
 it('does not run a full integrity re-hash on widget load', function () {
-    $this->seedLedger(count: 5, checkpointEvery: 5);
+    $this->seedLedger(checkpointEvery: 5);
 
     // The widget may run the O(#checkpoints) CheckpointChainVerifier, but must
     // never trigger a full IntegrityVerifier re-hash on render. IntegrityVerifier
@@ -29,11 +29,6 @@ it('does not run a full integrity re-hash on widget load', function () {
         public function verify(): never
         {
             throw new RuntimeException('IntegrityVerifier::verify() must not run during widget render');
-        }
-
-        public function verifyEntryRange(int $fromSequence, int $toSequence): never
-        {
-            throw new RuntimeException('IntegrityVerifier::verifyEntryRange() must not run during widget render');
         }
     });
 

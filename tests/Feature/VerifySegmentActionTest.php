@@ -8,6 +8,7 @@ use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -19,7 +20,8 @@ it('verifies a selected segment span and records it', function () {
     $selection = Entry::query()->whereBetween('sequence', [2, 5])->get();
 
     Livewire::test(ListEntries::class)
-        ->callTableBulkAction('verifySegment', $selection);
+        ->selectTableRecords($selection)
+        ->callAction(TestAction::make('verifySegment')->table()->bulk());
 
     expect(app(VerificationResultStore::class)->chainState('segment'))->toBe(VerificationState::Verified);
 });
@@ -36,7 +38,8 @@ it('detects a tampered row inside the selected span', function () {
     DB::table($victim->getTable())->where('id', $victim->id)->update(['payload' => json_encode(['tampered' => true])]);
 
     Livewire::test(ListEntries::class)
-        ->callTableBulkAction('verifySegment', $selection);
+        ->selectTableRecords($selection)
+        ->callAction(TestAction::make('verifySegment')->table()->bulk());
 
     $record = app(VerificationResultStore::class)->chainRecord('segment');
     expect($record?->state)->toBe('failed')
@@ -50,9 +53,23 @@ it('dispatches a large segment to the queue', function () {
     Queue::fake();
 
     Livewire::test(ListEntries::class)
-        ->callTableBulkAction('verifySegment', $selection);
+        ->selectTableRecords($selection)
+        ->callAction(TestAction::make('verifySegment')->table()->bulk());
 
     Queue::assertPushed(VerifyLedgerJob::class, fn (VerifyLedgerJob $job): bool => $job->mode === 'segment' && $job->fromSequence === 1 && $job->toSequence === 8);
+});
+
+it('does nothing when the selection contains no entries', function () {
+    Config::set('chronicle-filament.verification.queue_threshold', 1000);
+    $this->seedLedger(count: 3, checkpointEvery: 3);
+
+    Livewire::test(ListEntries::class)
+        ->loadTable()
+        ->selectTableRecords(collect())
+        ->callAction(TestAction::make('verifySegment')->table()->bulk());
+
+    // No selection -> no span -> the action returns early without recording.
+    expect(app(VerificationResultStore::class)->chainRecord('segment'))->toBeNull();
 });
 
 it('hides the verify-segment bulk action when authorization denies it', function () {
@@ -60,5 +77,5 @@ it('hides the verify-segment bulk action when authorization denies it', function
     ChronicleFilamentPlugin::get()->authorize(fn (): bool => false);
 
     Livewire::test(ListEntries::class)
-        ->assertTableBulkActionHidden('verifySegment');
+        ->assertActionHidden(TestAction::make('verifySegment')->table()->bulk());
 });

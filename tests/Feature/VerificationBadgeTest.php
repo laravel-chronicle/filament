@@ -31,16 +31,11 @@ it('does not invoke any verifier while rendering the table', function () {
         {
             throw new RuntimeException('IntegrityVerifier::verify() must not run during table render');
         }
-
-        public function verifyEntryRange(int $fromSequence, int $toSequence): never
-        {
-            throw new RuntimeException('IntegrityVerifier::verifyEntryRange() must not run during table render');
-        }
     });
 
     $this->app->bind(EntryVerifier::class, fn () => new class
     {
-        public function verify(string $id): never
+        public function verify(): never
         {
             throw new RuntimeException('EntryVerifier::verify() must not run during table render');
         }
@@ -59,4 +54,43 @@ it('renders badges for a full page without per-row store queries', function () {
     // entries page + checkpoint eager-load + one store prime + one head-sequence
     // max(): a small constant, independent of row count. Guard against N+1.
     expect(count($queries))->toBeLessThan(12);
+});
+
+it('shows a failed badge for an entry recorded as failed', function () {
+    $this->seedLedger(count: 4, checkpointEvery: 4);
+    $entry = Entry::query()->where('sequence', 2)->firstOrFail();
+
+    // Tamper the stored payload, then verify so the store records a real failure.
+    DB::table($entry->getTable())->where('id', $entry->id)->update(['payload' => json_encode(['tampered' => true])]);
+    app(VerificationResultStore::class)->recordEntry($entry->id, app(EntryVerifier::class)->verify($entry->id));
+
+    // Render the row (not just the filter labels) so the badge state and the
+    // failure tooltip are both evaluated.
+    Livewire::test(ListEntries::class)
+        ->assertOk()
+        ->loadTable()
+        ->assertCanSeeTableRecords([$entry])
+        ->assertSee('Failed');
+});
+
+it('shows an unverified badge for an entry with no stored record', function () {
+    $this->seedLedger(count: 3, checkpointEvery: 3);
+    // No record is written: every row is unverified.
+
+    Livewire::test(ListEntries::class)
+        ->assertOk()
+        ->assertSee('Unverified');
+});
+
+it('shows a stale badge once newer entries are appended after verification', function () {
+    $this->seedLedger(count: 3, checkpointEvery: 3);
+    $entry = Entry::query()->where('sequence', 1)->firstOrFail();
+    app(VerificationResultStore::class)->recordEntry($entry->id, app(EntryVerifier::class)->verify($entry->id));
+
+    // Appending moves the chain head past verified_through -> verified becomes stale.
+    $this->seedLedger(count: 2);
+
+    Livewire::test(ListEntries::class)
+        ->assertOk()
+        ->assertSee('Stale');
 });
