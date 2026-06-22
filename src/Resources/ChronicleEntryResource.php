@@ -12,6 +12,7 @@ use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
 use Chronicle\Filament\Support\VerificationResultStore;
+use Chronicle\Filament\Support\VerificationState;
 use Chronicle\Verification\VerificationFailure;
 use Filament\Clusters\Cluster;
 use Filament\Forms\Components\DatePicker;
@@ -203,15 +204,36 @@ class ChronicleEntryResource extends Resource
                     }),
                 SelectFilter::make('verification_status')
                     ->label('Verification')
-                    // Stub: options final, but the store-backed query arrives in
-                    // Session 4. No-op query keeps the filter inert until then.
                     ->options([
                         'verified' => 'Verified',
                         'failed' => 'Failed',
                         'unverified' => 'Unverified',
                         'stale' => 'Stale',
                     ])
-                    ->query(fn (Builder $query): Builder => $query),
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (! is_string($value) || $value === '') {
+                            return $query;
+                        }
+
+                        $state = VerificationState::from($value);
+                        $store = app(VerificationResultStore::class);
+
+                        if ($state === VerificationState::Unverified) {
+                            // Unverified = no stored record at all: exclude every entry that
+                            // has any stored state.
+                            $recorded = array_merge(
+                                $store->entryIdsWithState(VerificationState::Verified),
+                                $store->entryIdsWithState(VerificationState::Failed),
+                                $store->entryIdsWithState(VerificationState::Stale),
+                            );
+
+                            return $query->whereNotIn('id', $recorded);
+                        }
+
+                        return $query->whereIn('id', $store->entryIdsWithState($state));
+                    }),
             ]);
     }
 
