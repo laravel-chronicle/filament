@@ -11,6 +11,8 @@ use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
+use Chronicle\Filament\Support\VerificationResultStore;
+use Chronicle\Verification\VerificationFailure;
 use Filament\Clusters\Cluster;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\KeyValueEntry;
@@ -149,11 +151,10 @@ class ChronicleEntryResource extends Resource
                 TextColumn::make('verification_status')
                     ->label('Verified')
                     ->badge()
-                    // Verification store lands in Session 4; until then every
-                    // entry reads as "unverified". Shape is final so Session 4
-                    // only swaps the data source.
-                    ->state(fn (Entry $record): string => 'unverified')
-                    ->color('gray')
+                    ->state(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->getKey())->label())
+                    ->color(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->getKey())->color())
+                    ->icon(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->getKey())->icon())
+                    ->tooltip(fn (Entry $record): ?string => static::verificationTooltip($record))
                     ->toggleable(),
             ])
             ->filters([
@@ -327,5 +328,22 @@ class ChronicleEntryResource extends Resource
 
         // Arrays (plaintext payloads) and any other structured value.
         return (string) json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    protected static function verificationTooltip(Entry $record): ?string
+    {
+        $store = app(VerificationResultStore::class);
+        $entryRecord = $store->entryRecord($record->getKey());
+
+        if ($entryRecord === null) {
+            return null;
+        }
+
+        $when = $entryRecord->last_verified_at?->diffForHumans();
+        $failure = VerificationFailure::tryFrom((string) $entryRecord->failure_code)?->name;
+
+        return $failure !== null
+            ? "Last checked $when - failure: $failure"
+            : "Last verified $when";
     }
 }
