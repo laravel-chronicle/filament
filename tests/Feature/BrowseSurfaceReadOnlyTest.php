@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
+use Filament\Actions\Testing\TestAction;
 use Livewire\Livewire;
 
 it('renders list and view against seeded data with no mutating actions', function () {
@@ -14,8 +15,8 @@ it('renders list and view against seeded data with no mutating actions', functio
 
     Livewire::test(ListEntries::class)
         ->assertOk()
-        ->assertTableActionDoesNotExist('delete')
-        ->assertTableActionDoesNotExist('edit');
+        ->assertActionDoesNotExist(TestAction::make('delete')->table($entry))
+        ->assertActionDoesNotExist(TestAction::make('edit')->table($entry));
 
     Livewire::test(ViewEntry::class, ['record' => $entry->getKey()])
         ->assertOk()

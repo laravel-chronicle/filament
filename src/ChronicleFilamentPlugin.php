@@ -14,6 +14,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Config;
 use UnitEnum;
 
+/**
+ * The Filament plugin for Chronicle: registers the read-only entry resource on a
+ * panel and exposes a fluent API for host configuration - navigation placement,
+ * slug, cluster, verification toggle, the authorize() gate for verify actions,
+ * and a label resolver. Each setting falls back to config/chronicle-filament.php.
+ */
 final class ChronicleFilamentPlugin implements Plugin
 {
     protected string|UnitEnum|null $navigationGroup = null;
@@ -33,11 +39,19 @@ final class ChronicleFilamentPlugin implements Plugin
 
     protected ?Closure $labelResolver = null;
 
+    /**
+     * Resolve the shared plugin instance for registering on a panel.
+     */
     public static function make(): ChronicleFilamentPlugin
     {
         return app(ChronicleFilamentPlugin::class);
     }
 
+    /**
+     * Resolve the active plugin instance, preferring the one attached to the
+     * panel handling the current request and falling back to the shared
+     * container instance during boot and route registration.
+     */
     public static function get(): ChronicleFilamentPlugin
     {
         // Prefer the instance attached to the panel handling the current
@@ -169,6 +183,10 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this->labelResolver;
     }
 
+    /**
+     * Whether the current user may run the verify actions. Defaults to allowed
+     * when no authorize() closure is configured; otherwise evaluates the closure.
+     */
     public function canVerify(?Model $record = null): bool
     {
         if ($this->authorizeUsing === null) {
@@ -178,6 +196,10 @@ final class ChronicleFilamentPlugin implements Plugin
         return (bool) ($this->authorizeUsing)($record);
     }
 
+    /**
+     * Apply the host's labelResolver() override for a reference, returning null
+     * when no resolver is set, or it yields no usable label.
+     */
     public function resolveLabel(string $type, string $id): ?string
     {
         if ($this->labelResolver === null) {

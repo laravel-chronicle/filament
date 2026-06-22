@@ -18,8 +18,8 @@ it('lets a reader browse while every verify action is hidden when verify is deni
     Livewire::test(ListEntries::class)
         ->loadTable()
         ->assertOk()
-        ->assertCanSeeTableRecords([$entry])                                  // reading still works
-        ->assertActionHidden('verifyChain')                                   // header verify gated
-        ->assertActionHidden(TestAction::make('verifyEntry')->table($entry))  // row verify gated
-        ->assertTableBulkActionHidden('verifySegment');                       // bulk verify gated
+        ->assertCanSeeTableRecords([$entry])
+        ->assertActionHidden('verifyChain')
+        ->assertActionHidden(TestAction::make('verifyEntry')->table($entry))
+        ->assertActionHidden(TestAction::make('verifySegment')->table()->bulk());
 });

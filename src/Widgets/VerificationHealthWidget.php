@@ -11,9 +11,17 @@ use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use JsonException;
 
+/**
+ * Stats widget on the list page surfacing the chain's stored verification status
+ * and last-verified time alongside a cheap checkpoint-spine check (O(#checkpoints),
+ * no full per-entry re-hash on load), reporting the first detected gap.
+ */
 class VerificationHealthWidget extends StatsOverviewWidget
 {
     /**
+     * Build the two stats: the chain's stored status with last-verified time, and
+     * a cheap checkpoint-spine check reporting the first detected gap.
+     *
      * @return array<int, Stat>
      *
      * @throws JsonException

@@ -28,7 +28,7 @@ it('persists a verification record row on the store table', function () {
 });
 
 it('round-trips a chain verification and reads it back as verified', function () {
-    $this->seedLedger(count: 5, checkpointEvery: 5);
+    $this->seedLedger(checkpointEvery: 5);
     $result = app(IntegrityVerifier::class)->verify();
     $store = app(VerificationResultStore::class);
 
@@ -40,13 +40,13 @@ it('round-trips a chain verification and reads it back as verified', function ()
 });
 
 it('reports a chain as stale once newer entries are appended', function () {
-    $this->seedLedger(count: 5, checkpointEvery: 5);
+    $this->seedLedger(checkpointEvery: 5);
     $store = app(VerificationResultStore::class);
     $store->recordChain(app(IntegrityVerifier::class)->verify());
 
     expect($store->chainState())->toBe(VerificationState::Verified);
 
-    $this->seedLedger(count: 3, checkpointEvery: 0); // head moves past verified_through
+    $this->seedLedger(count: 3); // head moves past verified_through
 
     expect($store->chainState())->toBe(VerificationState::Stale);
 });

@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Config;
 
 /**
+ * Eloquent model for the plugin-owned verification result store: one row per
+ * verified chain, segment, or entry, recording state, failure details, and how
+ * far the chain was verified. Lives on the configurable store connection.
+ *
  * @property int $id
  * @property string $scope
  * @property string $subject_key
@@ -39,6 +43,10 @@ class VerificationRecord extends Model
         ];
     }
 
+    /**
+     * Resolve the store connection from config, falling back to the default
+     * connection when none is configured.
+     */
     public function getConnectionName(): ?string
     {
         $connection = Config::get('chronicle-filament.verification.store.connection');

@@ -31,16 +31,11 @@ it('does not invoke any verifier while rendering the table', function () {
         {
             throw new RuntimeException('IntegrityVerifier::verify() must not run during table render');
         }
-
-        public function verifyEntryRange(int $fromSequence, int $toSequence): never
-        {
-            throw new RuntimeException('IntegrityVerifier::verifyEntryRange() must not run during table render');
-        }
     });
 
     $this->app->bind(EntryVerifier::class, fn () => new class
     {
-        public function verify(string $id): never
+        public function verify(): never
         {
             throw new RuntimeException('EntryVerifier::verify() must not run during table render');
         }
@@ -69,8 +64,12 @@ it('shows a failed badge for an entry recorded as failed', function () {
     DB::table($entry->getTable())->where('id', $entry->id)->update(['payload' => json_encode(['tampered' => true])]);
     app(VerificationResultStore::class)->recordEntry($entry->id, app(EntryVerifier::class)->verify($entry->id));
 
+    // Render the row (not just the filter labels) so the badge state and the
+    // failure tooltip are both evaluated.
     Livewire::test(ListEntries::class)
         ->assertOk()
+        ->loadTable()
+        ->assertCanSeeTableRecords([$entry])
         ->assertSee('Failed');
 });
 
