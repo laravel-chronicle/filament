@@ -13,11 +13,14 @@ use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
+use Chronicle\Verification\EntryVerifier;
 use Chronicle\Verification\VerificationFailure;
+use Filament\Actions\Action;
 use Filament\Clusters\Cluster;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Panel;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
@@ -233,6 +236,25 @@ class ChronicleEntryResource extends Resource
                         }
 
                         return $query->whereIn('id', $store->entryIdsWithState($state));
+                    }),
+            ])
+            ->recordActions([
+                Action::make('verifyEntry')
+                    ->label('Verify')
+                    ->icon('heroicon-o-shield-check')
+                    ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->canVerify($record))
+                    ->action(function (Entry $record): void {
+                        $result = app(EntryVerifier::class)->verify($record->getKey());
+                        app(VerificationResultStore::class)->recordEntry($record->getKey(), $result);
+
+                        $notification = Notification::make()
+                            ->title($result->isValid() ? 'Entry verified' : 'Entry verification failed');
+
+                        $result->isValid()
+                            ? $notification->success()->send()
+                            : $notification->danger()->body(
+                                'Failure: '.(VerificationFailure::tryFrom((string) $result->failureCode())?->name ?? 'unknown'),
+                            )->send();
                     }),
             ]);
     }
