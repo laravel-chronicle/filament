@@ -40,3 +40,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Verification badge column now has rendered-badge coverage for every stored status - `Failed` (tampered + verified), `Unverified` (no record), and `Stale` (chain head advanced past the verified point) - not just `Verified`.
 - Read-vs-verify separation guard: a caller with read access still browses the table while the chain, entry, and segment verify actions are all hidden together when the plugin `->authorize` closure denies verification.
+- Read-only invariant guard now also asserts the `ViewEntry` detail page exposes zero header actions, failing loudly if a mutating header action is ever added.
