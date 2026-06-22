@@ -7,6 +7,7 @@ namespace Chronicle\Filament\Resources;
 use BackedEnum;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
+use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\PreviousHash;
@@ -14,8 +15,11 @@ use Chronicle\Filament\Support\ReferenceLabel;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
 use Chronicle\Verification\EntryVerifier;
+use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Clusters\Cluster;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\KeyValueEntry;
@@ -32,6 +36,8 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 use Stringable;
 use UnitEnum;
@@ -256,6 +262,47 @@ class ChronicleEntryResource extends Resource
                                 'Failure: '.(VerificationFailure::tryFrom((string) $result->failureCode())?->name ?? 'unknown'),
                             )->send();
                     }),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('verifySegment')
+                        ->label('Verify segment')
+                        ->icon('heroicon-o-shield-check')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn (): bool => ChronicleFilamentPlugin::get()->canVerify())
+                        ->action(function (Collection $records): void {
+                            $sequences = $records->map(fn (Entry $record): int => (int) $record->sequence);
+                            $min = (int) $sequences->min();
+                            $max = (int) $sequences->max();
+                            $span = $max - $min + 1;
+                            $threshold = Config::integer('chronicle-filament.verification.queue_threshold', 1000);
+
+                            if ($span > $threshold) {
+                                VerifyLedgerJob::dispatch('segment', $min, $max, Auth::id(), 'segment');
+
+                                Notification::make()
+                                    ->title('Segment verification queued')
+                                    ->body("Verifying entries $min-$max in the background.")
+                                    ->info()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $result = app(IntegrityVerifier::class)->verifyEntryRange($min, $max);
+                            app(VerificationResultStore::class)->recordChain($result, 'segment');
+
+                            $notification = Notification::make()
+                                ->title($result->isValid() ? "Segment $min-$max verified" : "Segment $min-$max verification failed");
+
+                            $result->isValid()
+                                ? $notification->success()->send()
+                                : $notification->danger()->body(
+                                    'First failure at entry '.((string) $result->entryId()).': '.(VerificationFailure::tryFrom((string) $result->failureType())?->name ?? 'unknown'),
+                                )->send();
+                        }),
+                ]),
             ]);
     }
 
