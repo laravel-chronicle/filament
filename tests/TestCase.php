@@ -95,6 +95,9 @@ abstract class TestCase extends Orchestra
         $coreDir = dirname((string) (new ReflectionClass(ChronicleServiceProvider::class))->getFileName());
 
         $this->loadMigrationsFrom($coreDir.'/../database/migrations');
+
+        $migration = require __DIR__.'/../database/migrations/create_chronicle_filament_verification_records_table.php.stub';
+        $migration->up();
     }
 
     /**

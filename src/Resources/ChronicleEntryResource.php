@@ -7,14 +7,24 @@ namespace Chronicle\Filament\Resources;
 use BackedEnum;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
+use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
+use Chronicle\Filament\Support\VerificationResultStore;
+use Chronicle\Filament\Support\VerificationState;
+use Chronicle\Verification\EntryVerifier;
+use Chronicle\Verification\IntegrityVerifier;
+use Chronicle\Verification\VerificationFailure;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Clusters\Cluster;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Panel;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
@@ -26,6 +36,8 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 use Stringable;
 use UnitEnum;
@@ -149,11 +161,10 @@ class ChronicleEntryResource extends Resource
                 TextColumn::make('verification_status')
                     ->label('Verified')
                     ->badge()
-                    // Verification store lands in Session 4; until then every
-                    // entry reads as "unverified". Shape is final so Session 4
-                    // only swaps the data source.
-                    ->state(fn (Entry $record): string => 'unverified')
-                    ->color('gray')
+                    ->state(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->id)->label())
+                    ->color(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->id)->color())
+                    ->icon(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->id)->icon())
+                    ->tooltip(fn (Entry $record): ?string => static::verificationTooltip($record))
                     ->toggleable(),
             ])
             ->filters([
@@ -202,15 +213,107 @@ class ChronicleEntryResource extends Resource
                     }),
                 SelectFilter::make('verification_status')
                     ->label('Verification')
-                    // Stub: options final, but the store-backed query arrives in
-                    // Session 4. No-op query keeps the filter inert until then.
                     ->options([
                         'verified' => 'Verified',
                         'failed' => 'Failed',
                         'unverified' => 'Unverified',
                         'stale' => 'Stale',
                     ])
-                    ->query(fn (Builder $query): Builder => $query),
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (! is_string($value) || $value === '') {
+                            return $query;
+                        }
+
+                        $state = VerificationState::from($value);
+                        $store = app(VerificationResultStore::class);
+
+                        if ($state === VerificationState::Unverified) {
+                            // Unverified = no stored record at all: exclude every entry that
+                            // has any stored state.
+                            $recorded = array_merge(
+                                $store->entryIdsWithState(VerificationState::Verified),
+                                $store->entryIdsWithState(VerificationState::Failed),
+                                $store->entryIdsWithState(VerificationState::Stale),
+                            );
+
+                            return $query->whereNotIn('id', $recorded);
+                        }
+
+                        return $query->whereIn('id', $store->entryIdsWithState($state));
+                    }),
+            ])
+            ->recordActions([
+                Action::make('verifyEntry')
+                    ->label('Verify')
+                    ->icon('heroicon-o-shield-check')
+                    ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->canVerify($record))
+                    ->action(function (Entry $record): void {
+                        $result = app(EntryVerifier::class)->verify($record->id);
+                        app(VerificationResultStore::class)->recordEntry($record->id, $result);
+
+                        $notification = Notification::make()
+                            ->title($result->isValid() ? 'Entry verified' : 'Entry verification failed');
+
+                        $result->isValid()
+                            ? $notification->success()->send()
+                            : $notification->danger()->body(
+                                'Failure: '.(VerificationFailure::tryFrom((string) $result->failureCode())->name ?? 'unknown'),
+                            )->send();
+                    }),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('verifySegment')
+                        ->label('Verify segment')
+                        ->icon('heroicon-o-shield-check')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn (): bool => ChronicleFilamentPlugin::get()->canVerify())
+                        ->action(function (Collection $records): void {
+                            $sequences = [];
+
+                            foreach ($records as $record) {
+                                if ($record instanceof Entry) {
+                                    $sequences[] = $record->sequence;
+                                }
+                            }
+
+                            if ($sequences === []) {
+                                return;
+                            }
+
+                            $min = min($sequences);
+                            $max = max($sequences);
+                            $span = $max - $min + 1;
+                            $threshold = Config::integer('chronicle-filament.verification.queue_threshold', 1000);
+
+                            if ($span > $threshold) {
+                                VerifyLedgerJob::dispatch('segment', $min, $max, Auth::id(), 'segment');
+
+                                Notification::make()
+                                    ->title('Segment verification queued')
+                                    ->body("Verifying entries $min-$max in the background.")
+                                    ->info()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $result = app(IntegrityVerifier::class)->verifyEntryRange($min, $max);
+                            app(VerificationResultStore::class)->recordChain($result, 'segment');
+
+                            $notification = Notification::make()
+                                ->title($result->isValid() ? "Segment $min-$max verified" : "Segment $min-$max verification failed");
+
+                            $result->isValid()
+                                ? $notification->success()->send()
+                                : $notification->danger()->body(
+                                    'First failure at entry '.((string) $result->entryId()).': '.(VerificationFailure::tryFrom((string) $result->failureType())->name ?? 'unknown'),
+                                )->send();
+                        }),
+                ]),
             ]);
     }
 
@@ -327,5 +430,22 @@ class ChronicleEntryResource extends Resource
 
         // Arrays (plaintext payloads) and any other structured value.
         return (string) json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    protected static function verificationTooltip(Entry $record): ?string
+    {
+        $store = app(VerificationResultStore::class);
+        $entryRecord = $store->entryRecord($record->id);
+
+        if ($entryRecord === null) {
+            return null;
+        }
+
+        $when = $entryRecord->last_verified_at?->diffForHumans();
+        $failure = VerificationFailure::tryFrom((string) $entryRecord->failure_code)?->name;
+
+        return $failure !== null
+            ? "Last checked $when - failure: $failure"
+            : "Last verified $when";
     }
 }
