@@ -32,6 +32,8 @@ model is immutable at the data layer. The UI is defence in depth on top of that.
 
 ```bash
 composer require laravel-chronicle/filament
+php artisan vendor:publish --tag=chronicle-filament-migrations # publish migrations
+php artisan migrate   # run migrations
 ```
 
 Optionally publish the config:
