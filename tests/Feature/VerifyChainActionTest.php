@@ -29,7 +29,9 @@ it('records a failed chain when a row is tampered', function () {
 
     // Tamper a hashed column directly so the recomputed chain no longer matches.
     $victim = Entry::query()->where('sequence', 3)->firstOrFail();
-    DB::table($victim->getTable())->where('id', $victim->id)->update(['payload' => json_encode(['tampered' => true])]);
+    DB::table($victim->getTable())
+        ->where('id', $victim->id)
+        ->update(['payload' => json_encode(['tampered' => true])]);
 
     Livewire::test(ListEntries::class)
         ->callAction('verifyChain');

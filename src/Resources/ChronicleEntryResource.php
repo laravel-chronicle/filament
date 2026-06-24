@@ -181,6 +181,14 @@ class ChronicleEntryResource extends Resource
                     ->icon(fn (Entry $record): string => app(VerificationResultStore::class)->entryState($record->id)->icon())
                     ->tooltip(fn (Entry $record): ?string => static::verificationTooltip($record))
                     ->toggleable(),
+                TextColumn::make('anchor_state')
+                    ->label('Anchor')
+                    ->badge()
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isAnchoringEnabled())
+                    ->state(fn (Entry $record): string => AnchorState::forEntry($record)->label())
+                    ->color(fn (Entry $record): string => AnchorState::forEntry($record)->color())
+                    ->icon(fn (Entry $record): string => AnchorState::forEntry($record)->icon())
+                    ->toggleable(),
             ])
             ->filters([
                 SelectFilter::make('action')
@@ -257,6 +265,36 @@ class ChronicleEntryResource extends Resource
                         }
 
                         return $query->whereIn('id', $store->entryIdsWithState($state));
+                    }),
+                SelectFilter::make('anchor_state')
+                    ->label('Anchor')
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isAnchoringEnabled())
+                    ->options([
+                        'anchored' => 'Anchored',
+                        'pending' => 'Pending',
+                        'failed' => 'Failed',
+                        'unanchored' => 'Unanchored',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (! is_string($value) || $value === '') {
+                            return $query;
+                        }
+
+                        return match (AnchorState::from($value)) {
+                            AnchorState::Anchored => $query->whereHas('checkpoint.anchors', fn (Builder $q): Builder => $q->where('status', 'anchored')),
+                            AnchorState::Failed => $query
+                                ->whereHas('checkpoint.anchors', fn (Builder $q): Builder => $q->where('status', 'failed'))
+                                ->whereDoesntHave('checkpoint.anchors', fn (Builder $q): Builder => $q->where('status', 'anchored')),
+                            AnchorState::Pending => $query
+                                ->whereHas('checkpoint.anchors', fn (Builder $q): Builder => $q->where('status', 'pending'))
+                                ->whereDoesntHave('checkpoint.anchors', fn (Builder $q): Builder => $q->whereIn('status', ['anchored', 'failed'])),
+                            AnchorState::Unanchored => $query->where(fn (Builder $q): Builder => $q
+                                ->whereNull('checkpoint_id')
+                                ->orWhereDoesntHave('checkpoint.anchors')),
+                            default => $query,
+                        };
                     }),
             ])
             ->recordActions([

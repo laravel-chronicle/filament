@@ -23,7 +23,8 @@ it('verifies a selected segment span and records it', function () {
         ->selectTableRecords($selection)
         ->callAction(TestAction::make('verifySegment')->table()->bulk());
 
-    expect(app(VerificationResultStore::class)->chainState('segment'))->toBe(VerificationState::Verified);
+    expect(app(VerificationResultStore::class)->chainState('segment'))
+        ->toBe(VerificationState::Verified);
 });
 
 it('detects a tampered row inside the selected span', function () {
@@ -35,7 +36,9 @@ it('detects a tampered row inside the selected span', function () {
     // DB (bypassing the model's immutability guard) so the chain no longer
     // recomputes to the stored hash.
     $victim = Entry::query()->where('sequence', 4)->firstOrFail();
-    DB::table($victim->getTable())->where('id', $victim->id)->update(['payload' => json_encode(['tampered' => true])]);
+    DB::table($victim->getTable())
+        ->where('id', $victim->id)
+        ->update(['payload' => json_encode(['tampered' => true])]);
 
     Livewire::test(ListEntries::class)
         ->selectTableRecords($selection)

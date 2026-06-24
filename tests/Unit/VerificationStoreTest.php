@@ -23,5 +23,7 @@ it('records an invalid anchor verification as Invalid with the AnchorInvalid cod
 });
 
 it('returns Unanchored for a checkpoint that was never anchor-verified', function () {
-    expect(app(VerificationResultStore::class)->anchorState('cp-unknown'))->toBe(AnchorState::Unanchored);
+    expect(app(VerificationResultStore::class)
+        ->anchorState('cp-unknown'))
+        ->toBe(AnchorState::Unanchored);
 });

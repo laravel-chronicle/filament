@@ -18,7 +18,8 @@ it('verifies a single entry and records it as verified', function () {
     Livewire::test(ListEntries::class)
         ->callAction(TestAction::make('verifyEntry')->table($entry));
 
-    expect(app(VerificationResultStore::class)->entryState($entry->id))->toBe(VerificationState::Verified);
+    expect(app(VerificationResultStore::class)->entryState($entry->id))
+        ->toBe(VerificationState::Verified);
 });
 
 it('records a failed entry and surfaces the failure case', function () {
@@ -26,12 +27,15 @@ it('records a failed entry and surfaces the failure case', function () {
     $entry = Entry::query()->where('sequence', 2)->firstOrFail();
 
     // Tamper the stored payload so the entry verifier reports a real failure.
-    DB::table($entry->getTable())->where('id', $entry->id)->update(['payload' => json_encode(['tampered' => true])]);
+    DB::table($entry->getTable())
+        ->where('id', $entry->id)
+        ->update(['payload' => json_encode(['tampered' => true])]);
 
     Livewire::test(ListEntries::class)
         ->callAction(TestAction::make('verifyEntry')->table($entry));
 
-    expect(app(VerificationResultStore::class)->entryState($entry->id))->toBe(VerificationState::Failed);
+    expect(app(VerificationResultStore::class)->entryState($entry->id))
+        ->toBe(VerificationState::Failed);
 });
 
 it('hides the verify-entry action when authorization denies it', function () {

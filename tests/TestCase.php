@@ -130,8 +130,12 @@ abstract class TestCase extends Orchestra
      * the checkpoint digest as its proof (NullAnchor::verify passes); a tampered
      * one stores a bogus proof (verify fails).
      */
-    protected function seedAnchor(string $checkpointId, string $status = 'anchored', bool $valid = true, string $provider = 'null'): CheckpointAnchor
-    {
+    protected function seedAnchor(
+        string $checkpointId,
+        string $status = 'anchored',
+        bool $valid = true,
+        string $provider = 'null',
+    ): CheckpointAnchor {
         $checkpoint = Checkpoint::query()->findOrFail($checkpointId);
 
         $anchor = new CheckpointAnchor([

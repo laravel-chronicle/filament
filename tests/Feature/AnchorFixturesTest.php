@@ -10,7 +10,7 @@ it('seeds a valid anchor that the AnchorVerifier accepts', function () {
     $ledger = $this->seedLedger(count: 2, checkpointEvery: 2);
     $checkpoint = Checkpoint::query()->findOrFail($ledger->lastCheckpointId);
 
-    $this->seedAnchor($checkpoint->id, status: 'anchored', valid: true);
+    $this->seedAnchor($checkpoint->id);
 
     expect(app(AnchorVerifier::class)->checkpointHasValidAnchor($checkpoint))->toBeTrue();
 });
@@ -20,7 +20,7 @@ it('seeds a tampered anchor that the AnchorVerifier rejects', function () {
     $ledger = $this->seedLedger(count: 2, checkpointEvery: 2);
     $checkpoint = Checkpoint::query()->findOrFail($ledger->lastCheckpointId);
 
-    $this->seedAnchor($checkpoint->id, status: 'anchored', valid: false);
+    $this->seedAnchor($checkpoint->id, valid: false);
 
     expect(app(AnchorVerifier::class)->checkpointHasValidAnchor($checkpoint))->toBeFalse();
 });
