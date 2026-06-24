@@ -17,7 +17,9 @@ it('merges the plugin config with the documented defaults', function () {
         ->and(config('chronicle-filament.slug'))->toBe('chronicle-entries')
         ->and(config('chronicle-filament.verification.enabled'))->toBeTrue()
         ->and(config('chronicle-filament.verification.queue_threshold'))->toBe(1000)
-        ->and(config('chronicle-filament.verification.store.connection'))->toBeNull();
+        ->and(config('chronicle-filament.verification.store.connection'))->toBeNull()
+        ->and(config('chronicle-filament.anchoring.enabled'))->toBeNull()
+        ->and(config('chronicle-filament.anchoring.verify_all_queue_threshold'))->toBe(1000);
 });
 
 it('publishes the config file under the chronicle-filament-config tag', function () {

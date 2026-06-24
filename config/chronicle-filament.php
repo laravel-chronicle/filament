@@ -62,4 +62,26 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | External anchoring (v1.1)
+    |--------------------------------------------------------------------------
+    |
+    | enabled                     Master toggle for the anchor surfaces (detail
+    |                             section, Verify-anchor action, column/filter,
+    |                             coverage widget - wired in A2/A3). null follows
+    |                             core's chronicle.anchoring.enabled; set true or
+    |                             false to force. Everything stays hidden when
+    |                             core anchoring is off.
+    | verify_all_queue_threshold  The coverage widget's optional "Verify all
+    |                             anchors" action dispatches to the queue when it
+    |                             would cover more than this many checkpoints.
+    |
+    */
+
+    'anchoring' => [
+        'enabled' => null,
+        'verify_all_queue_threshold' => 1000,
+    ],
+
 ];

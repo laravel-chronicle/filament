@@ -17,7 +17,9 @@ it('falls back to config defaults', function () {
         ->and($plugin->getSlug())->toBe('chronicle-entries')
         ->and($plugin->getCluster())->toBeNull()
         ->and($plugin->isVerificationEnabled())->toBeTrue()
-        ->and($plugin->getLabelResolver())->toBeNull();
+        ->and($plugin->getLabelResolver())->toBeNull()
+        ->and($plugin->isAnchoringEnabled())->toBeFalse()
+        ->and($plugin->getVerifyAllQueueThreshold())->toBe(1000);
 });
 
 it('honors fluent overrides', function () {
@@ -27,14 +29,16 @@ it('honors fluent overrides', function () {
         ->slug('audit')
         ->cluster('App\\Filament\\Clusters\\Audit')
         ->verification(false)
-        ->labelResolver(fn () => 'x');
+        ->labelResolver(fn () => 'x')
+        ->anchoring();
 
     expect($plugin->getNavigationGroup())->toBe('Security')
         ->and($plugin->getNavigationSort())->toBe(50)
         ->and($plugin->getSlug())->toBe('audit')
         ->and($plugin->getCluster())->toBe('App\\Filament\\Clusters\\Audit')
         ->and($plugin->isVerificationEnabled())->toBeFalse()
-        ->and($plugin->getLabelResolver())->toBeInstanceOf(Closure::class);
+        ->and($plugin->getLabelResolver())->toBeInstanceOf(Closure::class)
+        ->and($plugin->isAnchoringEnabled())->toBeTrue();
 });
 
 it('gates verification via the authorize closure, allowing by default', function () {
@@ -58,4 +62,20 @@ it('boots a panel without registering anything extra', function () {
     ChronicleFilamentPlugin::make()->boot($panel);
 
     expect($panel->getPlugin('chronicle-filament'))->toBeInstanceOf(ChronicleFilamentPlugin::class);
+});
+
+it('resolves anchoring from plugin config, then core, then the fluent override', function () {
+    // Default: plugin config null -> follow core (false in the test env).
+    expect(ChronicleFilamentPlugin::make()->isAnchoringEnabled())->toBeFalse();
+
+    // Core anchoring on, plugin config still null -> follows core.
+    config()->set('chronicle.anchoring.enabled', true);
+    expect(ChronicleFilamentPlugin::make()->isAnchoringEnabled())->toBeTrue();
+
+    // Plugin config wins over core.
+    config()->set('chronicle-filament.anchoring.enabled', false);
+    expect(ChronicleFilamentPlugin::make()->isAnchoringEnabled())->toBeFalse()
+        // Fluent override wins over everything.
+        ->and(ChronicleFilamentPlugin::make()->anchoring()->isAnchoringEnabled())->toBeTrue();
+
 });

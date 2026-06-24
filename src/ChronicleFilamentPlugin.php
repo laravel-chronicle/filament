@@ -35,6 +35,8 @@ final class ChronicleFilamentPlugin implements Plugin
 
     protected ?bool $verification = null;
 
+    protected ?bool $anchoring = null;
+
     protected ?Closure $authorizeUsing = null;
 
     protected ?Closure $labelResolver = null;
@@ -124,6 +126,13 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this;
     }
 
+    public function anchoring(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->anchoring = $condition;
+
+        return $this;
+    }
+
     public function authorize(Closure $callback): ChronicleFilamentPlugin
     {
         $this->authorizeUsing = $callback;
@@ -176,6 +185,32 @@ final class ChronicleFilamentPlugin implements Plugin
     public function isVerificationEnabled(): bool
     {
         return $this->verification ?? Config::boolean('chronicle-filament.verification.enabled', true);
+    }
+
+    /**
+     * Whether the anchor surfaces are enabled. Fluent override wins; otherwise
+     * the plugin's anchoring.enabled config when set to a bool; otherwise follow
+     * core's chronicle.anchoring.enabled (default false). Everything stays hidden
+     * when core anchoring is off.
+     */
+    public function isAnchoringEnabled(): bool
+    {
+        if ($this->anchoring !== null) {
+            return $this->anchoring;
+        }
+
+        $configured = Config::get('chronicle-filament.anchoring.enabled');
+
+        if (is_bool($configured)) {
+            return $configured;
+        }
+
+        return Config::boolean('chronicle.anchoring.enabled', false);
+    }
+
+    public function getVerifyAllQueueThreshold(): int
+    {
+        return Config::integer('chronicle-filament.anchoring.verify_all_queue_threshold', 1000);
     }
 
     public function getLabelResolver(): ?Closure
