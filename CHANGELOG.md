@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `Support\AnchorState`: string-backed enum (`anchored`/`pending`/`failed`/`unanchored`/`invalid`) - the single source of truth for external-anchor badge color, icon, and label. Static helpers `fromStatuses()`, `forCheckpoint()`, and `forEntry()` derive state from core's stored `CheckpointAnchor.status` only (precedence anchored > failed > pending > unanchored), never running a provider verification; an entry with no checkpoint and the anchoring-disabled / no-rows case both map to `Unanchored`, never an error.
+
+---
+
 ## [1.0.0] - 2026-06-22
 
 `laravel-chronicle/filament` v1.0 - a read-only Filament v4/v5 panel for
