@@ -21,7 +21,10 @@ class ViewEntry extends ViewRecord
      */
     protected function getHeaderActions(): array
     {
-        // No Edit/Delete actions - read-only. Verify actions arrive in Session 4.
-        return [];
+        // No Edit/Delete actions - read-only. The Verify-anchor action only reads and
+        // records a verification result; it never mutates the entry or anchor.
+        return [
+            ChronicleEntryResource::verifyAnchorAction(),
+        ];
     }
 }

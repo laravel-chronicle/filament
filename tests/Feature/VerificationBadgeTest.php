@@ -13,7 +13,8 @@ use Livewire\Livewire;
 it('shows a verified badge for an entry recorded as verified', function () {
     $this->seedLedger(count: 3, checkpointEvery: 3);
     $entry = Entry::query()->where('sequence', 1)->firstOrFail();
-    app(VerificationResultStore::class)->recordEntry($entry->id, app(EntryVerifier::class)->verify($entry->id));
+    app(VerificationResultStore::class)
+        ->recordEntry($entry->id, app(EntryVerifier::class)->verify($entry->id));
 
     Livewire::test(ListEntries::class)
         ->assertSee('Verified');

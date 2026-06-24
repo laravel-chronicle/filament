@@ -13,7 +13,8 @@ it('narrows the table to entries with the selected verification state', function
     $verified = Entry::query()->where('sequence', 2)->firstOrFail();
     $others = Entry::query()->where('sequence', '!=', 2)->get();
 
-    app(VerificationResultStore::class)->recordEntry($verified->id, app(EntryVerifier::class)->verify($verified->id));
+    app(VerificationResultStore::class)
+        ->recordEntry($verified->id, app(EntryVerifier::class)->verify($verified->id));
 
     Livewire::test(ListEntries::class)
         ->loadTable()
@@ -27,7 +28,8 @@ it('narrows to unverified entries (no stored record)', function () {
     $verified = Entry::query()->where('sequence', 1)->firstOrFail();
     $unverified = Entry::query()->where('sequence', '!=', 1)->get();
 
-    app(VerificationResultStore::class)->recordEntry($verified->id, app(EntryVerifier::class)->verify($verified->id));
+    app(VerificationResultStore::class)
+        ->recordEntry($verified->id, app(EntryVerifier::class)->verify($verified->id));
 
     Livewire::test(ListEntries::class)
         ->loadTable()
