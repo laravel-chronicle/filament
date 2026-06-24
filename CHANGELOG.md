@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `Support\AnchorState`: string-backed enum (`anchored`/`pending`/`failed`/`unanchored`/`invalid`) - the single source of truth for external-anchor badge color, icon, and label. Static helpers `fromStatuses()`, `forCheckpoint()`, and `forEntry()` derive state from core's stored `CheckpointAnchor.status` only (precedence anchored > failed > pending > unanchored), never running a provider verification; an entry with no checkpoint and the anchoring-disabled / no-rows case both map to `Unanchored`, never an error.
+- `anchoring` config block in `config/chronicle-filament.php`: `enabled` (null = follow core's `chronicle.anchoring.enabled`, or force `true`/`false`) and `verify_all_queue_threshold` (default 1000) - gating the v1.1 anchor surfaces wired in A2/A3. Default everything hidden when core anchoring is off.
+- `ChronicleFilamentPlugin::anchoring(bool)` fluent toggle plus `isAnchoringEnabled()` (override -> plugin config -> core `chronicle.anchoring.enabled`) and `getVerifyAllQueueThreshold()` getters, mirroring the verification gate.
+
+---
+
 ## [1.0.0] - 2026-06-22
 
 `laravel-chronicle/filament` v1.0 - a read-only Filament v4/v5 panel for
