@@ -28,7 +28,7 @@ it('denies mutation at both the resource and the Gate layer', function () {
         ->and(Gate::denies('delete', $entry))->toBeTrue();
 });
 
-it('exposes no header actions on the view page', function () {
+it('exposes only the read-only Verify-anchor header action on the view page', function () {
     $this->seedLedger(count: 2, checkpointEvery: 2);
     $entry = Entry::query()->where('sequence', 1)->firstOrFail();
 
@@ -37,9 +37,14 @@ it('exposes no header actions on the view page', function () {
         ->instance();
 
     // getHeaderActions() is protected; reach it via reflection. The detail page
-    // is strictly read-only: no header action may ever be added.
+    // is strictly read-only: the only header action permitted is the deliberate
+    // Verify-anchor action (it reads and records a verification result, never
+    // mutating the entry or anchor). No mutating action may ever be added.
     $headerActions = (new ReflectionMethod($page, 'getHeaderActions'))->invoke($page);
+    $names = array_map(fn (object $action): string => $action->getName(), $headerActions);
 
-    expect($headerActions)
-        ->toBe([], 'a header action was added to ViewEntry - the read-only invariant is broken');
+    expect($names)
+        ->toBe(['verifyAnchor'], 'an unexpected header action was added to ViewEntry - the read-only invariant is broken')
+        ->not->toContain('edit')
+        ->not->toContain('delete');
 });

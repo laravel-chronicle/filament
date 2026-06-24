@@ -6,6 +6,7 @@ namespace Chronicle\Filament\Resources;
 
 use BackedEnum;
 use Chronicle\Anchoring\CheckpointAnchor;
+use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
@@ -16,6 +17,7 @@ use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
+use Chronicle\Verification\AnchorVerifier;
 use Chronicle\Verification\EntryVerifier;
 use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
@@ -43,6 +45,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 use Stringable;
+use Throwable;
 use UnitEnum;
 
 /**
@@ -274,6 +277,7 @@ class ChronicleEntryResource extends Resource
                                 'Failure: '.(VerificationFailure::tryFrom((string) $result->failureCode())->name ?? 'unknown'),
                             )->send();
                     }),
+                static::verifyAnchorAction(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -454,6 +458,54 @@ class ChronicleEntryResource extends Resource
                             TextEntry::make('proof')->copyable()->limit(32)->placeholder('-'),
                         ]),
                 ]),        ]);
+    }
+
+    /**
+     * The deliberate, read-only Verify-anchor action, shared by the table row
+     * and the ViewEntry header. Calls AnchorVerifier::checkpointHasValidAnchor()
+     * - never on render - records the outcome, and notifies. Hidden when the
+     * entry is unanchored, anchoring is off, or authorization denies it.
+     */
+    public static function verifyAnchorAction(): Action
+    {
+        return Action::make('verifyAnchor')
+            ->label('Verify anchor')
+            ->icon('heroicon-o-link')
+            ->requiresConfirmation()
+            ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->isAnchoringEnabled()
+                && $record->checkpoint_id !== null
+                && ChronicleFilamentPlugin::get()->canVerify($record))
+            ->action(function (Entry $record): void {
+                $checkpoint = $record->checkpoint;
+
+                if (! $checkpoint instanceof Checkpoint) {
+                    Notification::make()->title('Entry is not anchored')->warning()->send();
+
+                    return;
+                }
+
+                try {
+                    $valid = app(AnchorVerifier::class)->checkpointHasValidAnchor($checkpoint);
+                } catch (Throwable $e) {
+                    // Provider errors (e.g. a TSA timeout) surface non-destructively.
+                    Notification::make()
+                        ->title('Anchor verification could not run')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                app(VerificationResultStore::class)->recordAnchor($checkpoint->id, $valid);
+
+                $notification = Notification::make()
+                    ->title($valid ? 'Anchor verified' : 'Anchor verification failed');
+
+                $valid
+                    ? $notification->success()->send()
+                    : $notification->danger()->body('Failure: '.VerificationFailure::AnchorInvalid->name)->send();
+            });
     }
 
     /**
