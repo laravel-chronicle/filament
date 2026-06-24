@@ -6,6 +6,10 @@ namespace Chronicle\Filament\Tests;
 
 use BladeUI\Heroicons\BladeHeroiconsServiceProvider;
 use BladeUI\Icons\BladeIconsServiceProvider;
+use Chronicle\Anchoring\CheckpointAnchor;
+use Chronicle\Anchoring\CheckpointDigest;
+use Chronicle\Anchoring\NullAnchor;
+use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\ChronicleServiceProvider;
 use Chronicle\Filament\ChronicleFilamentServiceProvider;
 use Chronicle\Filament\Tests\Fixtures\TestPanelProvider;
@@ -109,5 +113,38 @@ abstract class TestCase extends Orchestra
             ->count($count)
             ->checkpointEvery($checkpointEvery)
             ->seed();
+    }
+
+    /**
+     * Turn core anchoring on with the in-DB NullAnchor provider registered, so
+     * the plugin's isAnchoringEnabled() follows core and seeded anchors verify.
+     */
+    protected function enableAnchoring(): void
+    {
+        Config::set('chronicle.anchoring.enabled', true);
+        Config::set('chronicle.anchoring.providers.null.provider', NullAnchor::class);
+    }
+
+    /**
+     * Attach a CheckpointAnchor row to a seeded checkpoint. A valid anchor stores
+     * the checkpoint digest as its proof (NullAnchor::verify passes); a tampered
+     * one stores a bogus proof (verify fails).
+     */
+    protected function seedAnchor(string $checkpointId, string $status = 'anchored', bool $valid = true, string $provider = 'null'): CheckpointAnchor
+    {
+        $checkpoint = Checkpoint::query()->findOrFail($checkpointId);
+
+        $anchor = new CheckpointAnchor([
+            'checkpoint_id' => $checkpointId,
+            'provider' => $provider,
+            'reference' => 'ref-'.$status,
+            'proof' => $valid ? CheckpointDigest::for($checkpoint) : 'tampered-proof',
+            'status' => $status,
+            'anchored_at' => $status === 'anchored' ? now()->toImmutable() : null,
+            'created_at' => now()->toImmutable(),
+        ]);
+        $anchor->save();
+
+        return $anchor;
     }
 }
