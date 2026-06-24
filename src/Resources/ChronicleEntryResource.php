@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Chronicle\Filament\Resources;
 
 use BackedEnum;
+use Chronicle\Anchoring\CheckpointAnchor;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
+use Chronicle\Filament\Support\AnchorState;
 use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
 use Chronicle\Filament\Support\VerificationResultStore;
@@ -23,6 +25,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Clusters\Cluster;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\KeyValueEntry;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Panel;
@@ -343,7 +346,7 @@ class ChronicleEntryResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('checkpoint');
+        return parent::getEloquentQuery()->with('checkpoint.anchors');
     }
 
     /**
@@ -426,8 +429,31 @@ class ChronicleEntryResource extends Resource
                         ->label('Subject erased')
                         ->state(fn (Entry $record): string => $record->erased() ? 'Yes (crypto-shredded)' : 'No'),
                 ]),
-            // Anchor-proof slot is a placeholder until v1.1 (DISCOVERY §5).
-        ]);
+            Section::make('External anchoring')
+                ->collapsible()
+                ->components([
+                    // Disabled / no-checkpoint / no-rows degrade to copy, never an error.
+                    TextEntry::make('anchor_placeholder')
+                        ->hiddenLabel()
+                        ->state(fn (Entry $record): string => static::anchorEmptyLabel($record))
+                        ->visible(fn (Entry $record): bool => static::anchorEmptyLabel($record) !== ''),
+                    // Stored status only - no provider verification on render.
+                    RepeatableEntry::make('checkpoint.anchors')
+                        ->hiddenLabel()
+                        ->visible(fn (Entry $record): bool => static::anchorEmptyLabel($record) === '')
+                        ->schema([
+                            TextEntry::make('provider'),
+                            TextEntry::make('anchor_state')
+                                ->label('Status')
+                                ->badge()
+                                ->state(fn (CheckpointAnchor $anchor): string => AnchorState::fromStatuses([$anchor->status])->label())
+                                ->color(fn (CheckpointAnchor $anchor): string => AnchorState::fromStatuses([$anchor->status])->color())
+                                ->icon(fn (CheckpointAnchor $anchor): string => AnchorState::fromStatuses([$anchor->status])->icon()),
+                            TextEntry::make('anchored_at')->label('Anchored at')->dateTime()->placeholder('-'),
+                            TextEntry::make('reference')->placeholder('-'),
+                            TextEntry::make('proof')->copyable()->limit(32)->placeholder('-'),
+                        ]),
+                ]),        ]);
     }
 
     /**
@@ -467,5 +493,28 @@ class ChronicleEntryResource extends Resource
         return $failure !== null
             ? "Last checked $when - failure: $failure"
             : "Last verified $when";
+    }
+
+    /**
+     * The degraded copy for the anchor section, or '' when real anchor rows
+     * should render instead. Reads stored state only - never a provider verify.
+     */
+    protected static function anchorEmptyLabel(Entry $record): string
+    {
+        if (! ChronicleFilamentPlugin::get()->isAnchoringEnabled()) {
+            return 'Anchoring not configured';
+        }
+
+        if ($record->checkpoint_id === null) {
+            return 'Unanchored';
+        }
+
+        $checkpoint = $record->checkpoint;
+
+        if ($checkpoint === null || $checkpoint->anchors->isEmpty()) {
+            return 'No anchors';
+        }
+
+        return '';
     }
 }
