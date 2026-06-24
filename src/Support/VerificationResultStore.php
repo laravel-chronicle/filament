@@ -7,6 +7,7 @@ namespace Chronicle\Filament\Support;
 use Carbon\CarbonImmutable;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Chronicle\Verification\EntryVerificationResult;
+use Chronicle\Verification\VerificationFailure;
 use Chronicle\Verification\VerificationResult;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -34,7 +35,14 @@ class VerificationResultStore
      */
     public function recordChain(VerificationResult $result, string $chainKey = 'default'): VerificationRecord
     {
-        return $this->upsert('chain', $chainKey, $result->isValid(), $result->failureType(), $result->entryId(), $result->checked());
+        return $this->upsert(
+            'chain',
+            $chainKey,
+            $result->isValid(),
+            $result->failureType(),
+            $result->entryId(),
+            $result->checked(),
+        );
     }
 
     /**
@@ -42,7 +50,57 @@ class VerificationResultStore
      */
     public function recordEntry(string $entryId, EntryVerificationResult $result): VerificationRecord
     {
-        return $this->upsert('entry', $entryId, $result->isValid(), $result->failureCode(), $result->isValid() ? null : $entryId, 1);
+        return $this->upsert(
+            'entry',
+            $entryId,
+            $result->isValid(),
+            $result->failureCode(),
+            $result->isValid() ? null : $entryId,
+            1,
+        );
+    }
+
+    /**
+     * Record the outcome of a deliberate anchor verification for a checkpoint,
+     * under the `anchor` scope. Reuses the existing store - no new migration.
+     */
+    public function recordAnchor(string $checkpointId, bool $valid): VerificationRecord
+    {
+        return $this->upsert(
+            'anchor',
+            $checkpointId,
+            $valid,
+            $valid ? null : VerificationFailure::AnchorInvalid->value,
+            null,
+            1,
+        );
+    }
+
+    /**
+     * The raw stored anchor-verification record for a checkpoint, or null.
+     */
+    public function anchorRecord(string $checkpointId): ?VerificationRecord
+    {
+        return VerificationRecord::query()
+            ->where('scope', 'anchor')
+            ->where('subject_key', $checkpointId)
+            ->first();
+    }
+
+    /**
+     * The anchor state derived from the stored anchor-verification outcome:
+     * Anchored (verified), Invalid (failed), or Unanchored (never verified).
+     * Anchor records are not subject to chain-head staleness.
+     */
+    public function anchorState(string $checkpointId): AnchorState
+    {
+        $record = $this->anchorRecord($checkpointId);
+
+        if ($record === null) {
+            return AnchorState::Unanchored;
+        }
+
+        return $record->state === 'failed' ? AnchorState::Invalid : AnchorState::Anchored;
     }
 
     /**
@@ -71,7 +129,10 @@ class VerificationResultStore
      */
     public function chainRecord(string $chainKey = 'default'): ?VerificationRecord
     {
-        return VerificationRecord::query()->where('scope', 'chain')->where('subject_key', $chainKey)->first();
+        return VerificationRecord::query()
+            ->where('scope', 'chain')
+            ->where('subject_key', $chainKey)
+            ->first();
     }
 
     /**
@@ -79,7 +140,10 @@ class VerificationResultStore
      */
     public function entryRecord(string $entryId): ?VerificationRecord
     {
-        return VerificationRecord::query()->where('scope', 'entry')->where('subject_key', $entryId)->first();
+        return VerificationRecord::query()
+            ->where('scope', 'entry')
+            ->where('subject_key', $entryId)
+            ->first();
     }
 
     /**
@@ -90,7 +154,9 @@ class VerificationResultStore
      */
     public function primeEntries(iterable $entryIds): void
     {
-        $ids = array_values(array_map('strval', is_array($entryIds) ? $entryIds : iterator_to_array($entryIds)));
+        $ids = array_values(
+            array_map('strval', is_array($entryIds) ? $entryIds : iterator_to_array($entryIds))
+        );
 
         // Cache the head once for this primed render so per-row badges stay
         // query-free; only primeEntries() may hold this memo (see currentHeadSequence).
@@ -123,8 +189,10 @@ class VerificationResultStore
 
         return match ($state) {
             VerificationState::Failed => $this->subjectKeys($query->where('state', 'failed')),
-            VerificationState::Verified => $this->subjectKeys($query->where('state', 'verified')->where('verified_through', '>=', $head)),
-            VerificationState::Stale => $this->subjectKeys($query->where('state', 'verified')->where('verified_through', '<', $head)),
+            VerificationState::Verified => $this->subjectKeys($query->where('state', 'verified')
+                ->where('verified_through', '>=', $head)),
+            VerificationState::Stale => $this->subjectKeys($query->where('state', 'verified')
+                ->where('verified_through', '<', $head)),
             VerificationState::Unverified => [], // absence of a record - handled by the filter via whereNotIn
         };
     }
@@ -192,8 +260,14 @@ class VerificationResultStore
      * Insert or update the record for a scope/key, stamping the verified-through
      * head and timestamp, and invalidate the per-render memos after the write.
      */
-    protected function upsert(string $scope, string $key, bool $valid, ?string $failureCode, ?string $failedEntryId, int $checked): VerificationRecord
-    {
+    protected function upsert(
+        string $scope,
+        string $key,
+        bool $valid,
+        ?string $failureCode,
+        ?string $failedEntryId,
+        int $checked
+    ): VerificationRecord {
         $this->primedEntries = null; // invalidate the badge memo after a write
         $this->headSequence = null;
 
