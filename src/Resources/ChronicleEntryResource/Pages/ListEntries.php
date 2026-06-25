@@ -12,6 +12,7 @@ use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Widgets\AnchorCoverageWidget;
+use Chronicle\Filament\Widgets\SigningKeyRingWidget;
 use Chronicle\Filament\Widgets\VerificationHealthWidget;
 use Chronicle\Verification\AnchorVerifier;
 use Chronicle\Verification\IntegrityVerifier;
@@ -154,6 +155,7 @@ class ListEntries extends ListRecords
         return [
             VerificationHealthWidget::class,
             AnchorCoverageWidget::class,
+            SigningKeyRingWidget::class,
         ];
     }
 }

@@ -55,8 +55,9 @@ it('renders the signing-key column without a per-row checkpoint query', function
     $checkpointQueries = collect(DB::getQueryLog())
         ->filter(fn (array $q): bool => str_contains((string) $q['query'], 'chronicle_checkpoints'));
 
-    // Checkpoints load via the resource's eager-load, not per row.
-    expect($checkpointQueries->count())->toBeLessThanOrEqual(1);
+    // Eager-load (1) + the key-ring widget's single grouped aggregate (1).
+    // Still constant - never proportional to the number of rows.
+    expect($checkpointQueries->count())->toBeLessThanOrEqual(2);
 
     DB::disableQueryLog();
 });
