@@ -16,6 +16,7 @@ signature verification already happens inside core's chain/entry verifiers, so v
 ### Added
 
 - `Support\SigningKeyState`: string-backed enum (`active`/`retired`/`unsigned`) - the single source of truth for signing-key badge color, icon, and label, mirroring `VerificationState`/`AnchorState`. Derived from a checkpoint's stored `(algorithm, key_id)` versus core's active signing key; never runs a provider sign/verify.
+- `Support\KeyRingSnapshot`: a read-only snapshot of core's signing key ring built from `KeyRing::all()` + `active()`. Lists configured keys (algorithm, keyId, active flag) keyed `"{algorithm}:{keyId}"`, derives a checkpoint's / entry's `SigningKeyState` by comparing its stored `(algorithm, key_id)` to the active key (non-active -> `Retired`, no checkpoint -> `Unsigned`), and reports cheap per-key checkpoint counts from one grouped aggregate. Reads provider metadata only - no `sign()`/`verify()`, no per-row query.
 
 ---
 
