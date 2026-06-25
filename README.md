@@ -19,6 +19,8 @@ model is immutable at the data layer. The UI is defence in depth on top of that.
 - ![Verification health widget](docs/screenshots/widget.png) <!-- placeholder -->
 - ![Anchor detail + coverage widget](docs/screenshots/anchoring.png) <!-- placeholder -->
 - ![Anchor column and Verify-anchor action](docs/screenshots/anchor-verify.png) <!-- placeholder -->
+- ![Signing-key column and Active/Retired badge](docs/screenshots/signing-key.png) <!-- placeholder -->
+- ![Key-ring summary widget](docs/screenshots/key-ring-widget.png) <!-- placeholder -->
 
 ## Requirements
 
@@ -62,6 +64,7 @@ public function panel(Panel $panel): Panel
                 ->slug('chronicle')
                 ->verification(true)
                 ->anchoring(true) // enable the external-anchor surfaces (defaults to following core)
+                ->signingKeys(true) // enable the signing-key surfaces (column/filter, detail badge, key-ring widget)
                 // Gate the verify actions independently of read access:
                 ->authorize(fn (): bool => auth()->user()?->can('verify-chronicle') ?? false)
                 // Optional: override actor/subject display labels (falls back to core's resolver):
@@ -77,20 +80,21 @@ closure gates only the chain/entry/segment **verify** actions.
 
 `config/chronicle-filament.php`:
 
-| Key                                    | Default                      | Purpose                                                                                                                                                                                                                                       |
-|----------------------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `entry_model`                          | `\Chronicle\Entry\Entry`     | The Eloquent model the resource reads. Point at a subclass to add accessors/relations. With core >= 1.13 the override is honored end-to-end by core's reader and verifiers when `chronicle.models.entry` matches.                             |
-| `navigation.group`                     | `'Chronicle'`                | Navigation group label.                                                                                                                                                                                                                       |
-| `navigation.sort`                      | `null`                       | Navigation sort order.                                                                                                                                                                                                                        |
-| `slug`                                 | `'chronicle-entries'`        | Resource route slug.                                                                                                                                                                                                                          |
-| `verification.enabled`                 | `true`                       | Master toggle for badges, verify actions, and the health widget.                                                                                                                                                                              |
-| `verification.queue_threshold`         | `1000`                       | Chain/segment verifies covering more than this many entries are dispatched to the queue instead of running synchronously.                                                                                                                     |
-| `verification.store.connection`        | `null`                       | Database connection for the plugin-owned verification result store. `null` = the app's default connection.                                                                                                                                    |
-| `anchoring.enabled`                    | `null`                       | Master toggle for the anchor surfaces (detail section, Verify-anchor, anchor column/filter, coverage widget). `null` follows core's `chronicle.anchoring.enabled`; set `true`/`false` to force. Hidden everywhere when core anchoring is off. |
-| `anchoring.verify_all_queue_threshold` | `1000`                       | The "Verify all anchors" action runs synchronously at or below this many in-scope checkpoints, and is dispatched to the queue above it.                                                                                                       |
+| Key                                    | Default                      | Purpose                                                                                                                                                                                                                                                                           |
+|----------------------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `entry_model`                          | `\Chronicle\Entry\Entry`     | The Eloquent model the resource reads. Point at a subclass to add accessors/relations. With core >= 1.13 the override is honored end-to-end by core's reader and verifiers when `chronicle.models.entry` matches.                                                                 |
+| `navigation.group`                     | `'Chronicle'`                | Navigation group label.                                                                                                                                                                                                                                                           |
+| `navigation.sort`                      | `null`                       | Navigation sort order.                                                                                                                                                                                                                                                            |
+| `slug`                                 | `'chronicle-entries'`        | Resource route slug.                                                                                                                                                                                                                                                              |
+| `verification.enabled`                 | `true`                       | Master toggle for badges, verify actions, and the health widget.                                                                                                                                                                                                                  |
+| `verification.queue_threshold`         | `1000`                       | Chain/segment verifies covering more than this many entries are dispatched to the queue instead of running synchronously.                                                                                                                                                         |
+| `verification.store.connection`        | `null`                       | Database connection for the plugin-owned verification result store. `null` = the app's default connection.                                                                                                                                                                        |
+| `anchoring.enabled`                    | `null`                       | Master toggle for the anchor surfaces (detail section, Verify-anchor, anchor column/filter, coverage widget). `null` follows core's `chronicle.anchoring.enabled`; set `true`/`false` to force. Hidden everywhere when core anchoring is off.                                     |
+| `anchoring.verify_all_queue_threshold` | `1000`                       | The "Verify all anchors" action runs synchronously at or below this many in-scope checkpoints, and is dispatched to the queue above it.                                                                                                                                           |
+| `signing_keys.enabled`                 | `true`                       | Master toggle for the signing-key surfaces - the "Signing key" column + filter, the ViewEntry Active/Retired badge, and the key-ring widget. Display-only: signature verification stays inside core's chain/entry verifiers; this surface only shows which key signed each entry. |
 
 The fluent plugin methods (`navigationGroup`, `navigationSort`, `slug`, `cluster`,
-`verification`, `anchoring`, `authorize`, `labelResolver`) override the matching config values per panel.
+`verification`, `anchoring`, `signingKeys`, `authorize`, `labelResolver`) override the matching config values per panel.
 
 ## Verification
 
@@ -135,6 +139,33 @@ Anchoring **requires core anchoring to be configured** and producing `anchored` 
 the surfaces with `->anchoring(true)` (or `anchoring.enabled` in config); by default they
 follow core's `chronicle.anchoring.enabled` and stay hidden when it is off, showing entries
 as `Unanchored`.
+
+## Signing keys (key rotation)
+
+Core signs each checkpoint with the active key from its signing **key ring**, and keeps
+retired keys in the ring so historical artifacts still verify. When you rotate keys (core's
+`chronicle:key:rotate`), the panel surfaces *which key signed each entry* - **read-only**:
+
+- **Signing-key column** - a "Signing key" column showing the entry's `checkpoint.key_id`
+  as a state-colored badge: `Active` (the current key), `Retired` (a superseded key that
+  still verifies), or `Unsigned` (an entry with no checkpoint). The algorithm and a
+  retired-key reassurance show in the tooltip.
+- **Filter by signing key** - narrow the audit log to a specific key; options come from
+  core's `KeyRing::all()`, labelled `algorithm:keyId` with the active key marked `(active)`.
+- **Detail badge** - the entry-detail "Signature" section shows an `Active`/`Retired` badge
+  beside the key id, with a hint that a retired key still verifies the entries it signed.
+- **Key-ring widget** - a stats widget summarising the active key, the number of keys in the
+  ring, how many are retired, and the active key's checkpoint coverage, from cheap aggregates.
+
+This surface is **display-only** - signature verification is already part of chain/entry
+verification (core's verifiers call `KeyRing::resolve`), so v1.2 adds **no** new verify
+action and nothing signs or verifies on a read or render path. Retired keys deliberately
+stay in the ring to verify historical artifacts; see core's
+[Signing & Keys](https://github.com/laravel-chronicle/core/blob/main/docs/signing-and-keys.md)
+guide on key rotation.
+
+Enable the surfaces with `->signingKeys(true)` (or `signing_keys.enabled` in config); they
+are on by default.
 
 ## Theming
 

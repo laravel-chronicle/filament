@@ -5,7 +5,7 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.2.0]
+## [1.2.0] - 2026-06-25
 
 `laravel-chronicle/filament` v1.2 - key-rotation visibility. Building on the read-only
 v1.1 panel, v1.2 surfaces which signing key signed each entry (from its checkpoint): an
@@ -22,6 +22,8 @@ signature verification already happens inside core's chain/entry verifiers, so v
 - `ChronicleEntryResource` "Signing key" table column (CHF-27): shows the entry's `checkpoint.key_id` as a `SigningKeyState`-colored badge (Active/Retired) with the algorithm and a retired-key reassurance in the tooltip; degrades to an `Unsigned` placeholder when the entry has no checkpoint. Derives state via `KeyRingSnapshot::forEntry()` from the already eager-loaded `checkpoint` - no `sign()`/`verify()`, no per-row query. Toggleable and gated on `->signingKeys()`.
 - `ChronicleEntryResource` "Signing key" table filter (CHF-27): options come from `KeyRingSnapshot::keys()` (core's `KeyRing::all()`), labelled `"{algorithm}:{keyId}"` with the active key marked `(active)`; selecting one narrows the table via `whereHas('checkpoint', algorithm = ..., key_id = ...)`. Gated on `->signingKeys()`. Adds the `TestCase::registerRetiredKey()` and `TestCase::retireCheckpoint()` fixtures backing the K2 signing-key tests.
 - `ChronicleEntryResource` ViewEntry Signature section signing-key badge (CHF-28): a `SigningKeyState` Active/Retired badge beside the key id, plus a retired-key hint ("Retired key - still verifies historical entries.") shown only for retired keys. Derived from the checkpoint via `KeyRingSnapshot::forEntry()`; hidden when the entry is unsigned or `->signingKeys()` is off. Read-only - no new affordance, no provider verify.
+- `Widgets\SigningKeyRingWidget` (CHF-29): a `StatsOverviewWidget` on the list-page header summarising core's signing key ring from `KeyRingSnapshot` - the active key (`algorithm:keyId`), the number of keys in the ring, how many are retired, and the active key's checkpoint coverage (checkpoints signed by the active key vs total). Built from provider metadata plus one grouped checkpoint aggregate; no `sign()`/`verify()` on load, no per-row query. Gated on `->signingKeys()`.
+- Rotated-ledger signing-key sweep (CHF-31): a `TestCase::seedRotatedLedger()` fixture that seeds a 9-entry ledger across a real `chronicle:key:rotate` (key A -> key B), giving Active-signed, Retired-signed, and Unsigned entries, plus a `SigningKeyRotationSweepTest` covering snapshot/state derivation, the column + filter, the detail badge, the key-ring widget, the no-per-row-query / no-verification-on-render guard, the `->signingKeys(false)` gate hiding every surface, and an explicit re-assertion of the read-only invariant.
 
 ---
 
@@ -89,6 +91,7 @@ surfaced as status badges and a health widget. The panel can never rewrite histo
 - README rewritten for v1.0: positioning lead (read-only, cannot rewrite history, the only Filament audit plugin with chain/entry/segment cryptographic verification), install + panel-registration snippet, full config reference (`entry_model`, navigation, slug, `verification.enabled`/`queue_threshold`/`store.connection`), compatibility matrix (PHP 8.2/8.4/8.5, Filament 4 & 5, Laravel 12 & 13, core 1.13+, `ext-sodium`/`ext-openssl` required), and screenshot placeholders.
 - Hardened the v1.0 test sweep: rendered-badge coverage for every stored status, a read-vs-verify separation guard, a `ViewEntry` no-header-action guard, and a confirmed-green gate (full Pest suite + PHPStan level 10 + Pint) across the CI matrix.
 
-[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.1.0...HEAD
+[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.2.0...HEAD
+[1.2.0]: https://github.com/laravel-chronicle/filament/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/laravel-chronicle/filament/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/laravel-chronicle/filament/releases/tag/1.0.0
