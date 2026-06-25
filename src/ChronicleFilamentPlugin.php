@@ -37,6 +37,8 @@ final class ChronicleFilamentPlugin implements Plugin
 
     protected ?bool $anchoring = null;
 
+    protected ?bool $signingKeys = null;
+
     protected ?Closure $authorizeUsing = null;
 
     protected ?Closure $labelResolver = null;
@@ -133,6 +135,13 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this;
     }
 
+    public function signingKeys(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->signingKeys = $condition;
+
+        return $this;
+    }
+
     public function authorize(Closure $callback): ChronicleFilamentPlugin
     {
         $this->authorizeUsing = $callback;
@@ -206,6 +215,16 @@ final class ChronicleFilamentPlugin implements Plugin
         }
 
         return Config::boolean('chronicle.anchoring.enabled', false);
+    }
+
+    /**
+     * Whether the signing-key surfaces (column, filter, detail badge, widget)
+     * are enabled. Fluent override wins; otherwise the plugin's
+     * signing_keys.enabled config (default true). Display-only - no verification.
+     */
+    public function isSigningKeysEnabled(): bool
+    {
+        return $this->signingKeys ?? Config::boolean('chronicle-filament.signing_keys.enabled', true);
     }
 
     public function getVerifyAllQueueThreshold(): int
