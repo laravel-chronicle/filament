@@ -151,4 +151,15 @@ abstract class TestCase extends Orchestra
 
         return $anchor;
     }
+
+    /**
+     * Relabel a seeded checkpoint's stored signing key id, so it derives a
+     * non-active (Retired) SigningKeyState. The seeder signs with the active
+     * dev key; this is the display-only way to simulate a key rotation without
+     * re-signing - K2/K3 only read the stored (algorithm, key_id).
+     */
+    protected function retireCheckpoint(string $checkpointId, string $keyId = 'old-key'): void
+    {
+        Checkpoint::query()->where('id', $checkpointId)->update(['key_id' => $keyId]);
+    }
 }

@@ -19,6 +19,7 @@ signature verification already happens inside core's chain/entry verifiers, so v
 - `Support\KeyRingSnapshot`: a read-only snapshot of core's signing key ring built from `KeyRing::all()` + `active()`. Lists configured keys (algorithm, keyId, active flag) keyed `"{algorithm}:{keyId}"`, derives a checkpoint's / entry's `SigningKeyState` by comparing its stored `(algorithm, key_id)` to the active key (non-active -> `Retired`, no checkpoint -> `Unsigned`), and reports cheap per-key checkpoint counts from one grouped aggregate. Reads provider metadata only - no `sign()`/`verify()`, no per-row query.
 - `signing_keys` config block in `config/chronicle-filament.php`: `enabled` (default `true`) - the master toggle for the v1.2 signing-key surfaces (column/filter, detail badge, key-ring widget), wired in K2/K3.
 - `ChronicleFilamentPlugin::signingKeys(bool)` fluent toggle plus `isSigningKeysEnabled()` getter (override -> `signing_keys.enabled` config, default true), mirroring the verification and anchoring gates.
+- `ChronicleEntryResource` "Signing key" table column (CHF-27): shows the entry's `checkpoint.key_id` as a `SigningKeyState`-colored badge (Active/Retired) with the algorithm and a retired-key reassurance in the tooltip; degrades to an `Unsigned` placeholder when the entry has no checkpoint. Derives state via `KeyRingSnapshot::forEntry()` from the already eager-loaded `checkpoint` - no `sign()`/`verify()`, no per-row query. Toggleable and gated on `->signingKeys()`.
 
 ---
 

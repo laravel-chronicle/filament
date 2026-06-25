@@ -13,8 +13,10 @@ use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\AnchorState;
+use Chronicle\Filament\Support\KeyRingSnapshot;
 use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
+use Chronicle\Filament\Support\SigningKeyState;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
 use Chronicle\Verification\AnchorVerifier;
@@ -188,6 +190,15 @@ class ChronicleEntryResource extends Resource
                     ->state(fn (Entry $record): string => AnchorState::forEntry($record)->label())
                     ->color(fn (Entry $record): string => AnchorState::forEntry($record)->color())
                     ->icon(fn (Entry $record): string => AnchorState::forEntry($record)->icon())
+                    ->toggleable(),
+                TextColumn::make('signing_key')
+                    ->label('Signing key')
+                    ->badge()
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled())
+                    ->state(fn (Entry $record): string => $record->checkpoint->key_id ?? 'Unsigned')
+                    ->color(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->color())
+                    ->icon(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->icon())
+                    ->tooltip(fn (Entry $record): ?string => static::signingKeyTooltip($record))
                     ->toggleable(),
             ])
             ->filters([
@@ -583,6 +594,26 @@ class ChronicleEntryResource extends Resource
         return $failure !== null
             ? "Last checked $when - failure: $failure"
             : "Last verified $when";
+    }
+
+    /**
+     * The signing-key column tooltip: the algorithm plus the derived state, with
+     * a retired-key reassurance. Null for an unsigned entry (no checkpoint).
+     * Reads the eager-loaded checkpoint metadata only - never a provider verify.
+     */
+    protected static function signingKeyTooltip(Entry $record): ?string
+    {
+        $checkpoint = $record->checkpoint;
+
+        if (! $checkpoint instanceof Checkpoint) {
+            return null;
+        }
+
+        $state = KeyRingSnapshot::make()->forCheckpoint($checkpoint);
+
+        return $state === SigningKeyState::Retired
+            ? $checkpoint->algorithm.' - retired key (still verifies historical entries)'
+            : $checkpoint->algorithm.' - '.$state->label();
     }
 
     /**
