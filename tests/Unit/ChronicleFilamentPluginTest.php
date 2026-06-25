@@ -19,7 +19,8 @@ it('falls back to config defaults', function () {
         ->and($plugin->isVerificationEnabled())->toBeTrue()
         ->and($plugin->getLabelResolver())->toBeNull()
         ->and($plugin->isAnchoringEnabled())->toBeFalse()
-        ->and($plugin->getVerifyAllQueueThreshold())->toBe(1000);
+        ->and($plugin->getVerifyAllQueueThreshold())->toBe(1000)
+        ->and($plugin->isSigningKeysEnabled())->toBeTrue();
 });
 
 it('honors fluent overrides', function () {
@@ -30,7 +31,8 @@ it('honors fluent overrides', function () {
         ->cluster('App\\Filament\\Clusters\\Audit')
         ->verification(false)
         ->labelResolver(fn () => 'x')
-        ->anchoring();
+        ->anchoring()
+        ->signingKeys(false);
 
     expect($plugin->getNavigationGroup())->toBe('Security')
         ->and($plugin->getNavigationSort())->toBe(50)
@@ -38,7 +40,8 @@ it('honors fluent overrides', function () {
         ->and($plugin->getCluster())->toBe('App\\Filament\\Clusters\\Audit')
         ->and($plugin->isVerificationEnabled())->toBeFalse()
         ->and($plugin->getLabelResolver())->toBeInstanceOf(Closure::class)
-        ->and($plugin->isAnchoringEnabled())->toBeTrue();
+        ->and($plugin->isAnchoringEnabled())->toBeTrue()
+        ->and($plugin->isSigningKeysEnabled())->toBeFalse();
 });
 
 it('gates verification via the authorize closure, allowing by default', function () {
@@ -78,4 +81,15 @@ it('resolves anchoring from plugin config, then core, then the fluent override',
         // Fluent override wins over everything.
         ->and(ChronicleFilamentPlugin::make()->anchoring()->isAnchoringEnabled())->toBeTrue();
 
+});
+
+it('resolves signing keys from config, then the fluent override', function () {
+    // Default: config enabled -> true.
+    expect(ChronicleFilamentPlugin::make()->isSigningKeysEnabled())->toBeTrue();
+
+    // Config can disable.
+    config()->set('chronicle-filament.signing_keys.enabled', false);
+    expect(ChronicleFilamentPlugin::make()->isSigningKeysEnabled())->toBeFalse()
+        // Fluent override wins over config.
+        ->and(ChronicleFilamentPlugin::make()->signingKeys()->isSigningKeysEnabled())->toBeTrue();
 });

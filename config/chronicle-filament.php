@@ -84,4 +84,21 @@ return [
         'verify_all_queue_threshold' => 1000,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Signing-key visibility (v1.2)
+    |--------------------------------------------------------------------------
+    |
+    | enabled  Master toggle for the signing-key surfaces (the "Signing key"
+    |          column + filter, the ViewEntry Active/Retired badge, and the
+    |          key-ring widget - wired in K2/K3). Display-only: signature
+    |          verification stays inside core's chain/entry verifiers; this
+    |          surface only shows which key signed each entry.
+    |
+    */
+
+    'signing_keys' => [
+        'enabled' => true,
+    ],
+
 ];
