@@ -5,7 +5,7 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.2.0]
+## [1.2.0] - 2026-06-25
 
 `laravel-chronicle/filament` v1.2 - key-rotation visibility. Building on the read-only
 v1.1 panel, v1.2 surfaces which signing key signed each entry (from its checkpoint): an
@@ -91,6 +91,7 @@ surfaced as status badges and a health widget. The panel can never rewrite histo
 - README rewritten for v1.0: positioning lead (read-only, cannot rewrite history, the only Filament audit plugin with chain/entry/segment cryptographic verification), install + panel-registration snippet, full config reference (`entry_model`, navigation, slug, `verification.enabled`/`queue_threshold`/`store.connection`), compatibility matrix (PHP 8.2/8.4/8.5, Filament 4 & 5, Laravel 12 & 13, core 1.13+, `ext-sodium`/`ext-openssl` required), and screenshot placeholders.
 - Hardened the v1.0 test sweep: rendered-badge coverage for every stored status, a read-vs-verify separation guard, a `ViewEntry` no-header-action guard, and a confirmed-green gate (full Pest suite + PHPStan level 10 + Pint) across the CI matrix.
 
-[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.1.0...HEAD
+[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.2.0...HEAD
+[1.2.0]: https://github.com/laravel-chronicle/filament/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/laravel-chronicle/filament/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/laravel-chronicle/filament/releases/tag/1.0.0
