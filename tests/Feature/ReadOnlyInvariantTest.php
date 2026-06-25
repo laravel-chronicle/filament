@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
+use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +46,26 @@ it('exposes only the read-only Verify-anchor header action on the view page', fu
 
     expect($names)
         ->toBe(['verifyAnchor'], 'an unexpected header action was added to ViewEntry - the read-only invariant is broken')
+        ->not->toContain('edit')
+        ->not->toContain('delete');
+});
+
+it('exposes only read-only header actions on the list page', function () {
+    $this->enableAnchoring();
+    $this->seedLedger(count: 2, checkpointEvery: 2);
+
+    $page = Livewire::test(ListEntries::class)
+        ->assertOk()
+        ->instance();
+
+    // The list page is strictly read-only: the only header actions permitted are
+    // the deliberate verify actions (they read/record/notify, never mutating an
+    // entry or anchor). No mutating action may ever be added.
+    $headerActions = (new ReflectionMethod($page, 'getHeaderActions'))->invoke($page);
+    $names = array_map(fn (object $action): string => $action->getName(), $headerActions);
+
+    expect($names)
+        ->toBe(['verifyChain', 'verifyAllAnchors'], 'an unexpected header action was added to ListEntries - the read-only invariant is broken')
         ->not->toContain('edit')
         ->not->toContain('delete');
 });

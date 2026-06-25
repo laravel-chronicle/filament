@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Chronicle\Filament\Resources\ChronicleEntryResource\Pages;
 
+use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
+use Chronicle\Filament\Jobs\VerifyAnchorsJob;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Chronicle\Filament\Support\VerificationResultStore;
+use Chronicle\Filament\Widgets\AnchorCoverageWidget;
 use Chronicle\Filament\Widgets\VerificationHealthWidget;
+use Chronicle\Verification\AnchorVerifier;
 use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
 use Filament\Actions\Action;
@@ -99,6 +103,46 @@ class ListEntries extends ListRecords
                         ? $notification->success()->send()
                         : $notification->danger()->body('Failure: '.(VerificationFailure::tryFrom((string) $result->failureType())->name ?? 'unknown'))->send();
                 }),
+            Action::make('verifyAllAnchors')
+                ->label('Verify all anchors')
+                ->icon('heroicon-o-link')
+                ->requiresConfirmation()
+                ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isAnchoringEnabled()
+                    && ChronicleFilamentPlugin::get()->canVerify())
+                ->action(function (): void {
+                    // In-scope = checkpoints carrying anchor rows (deliberate; never on render).
+                    $checkpoints = Checkpoint::query()->has('anchors')->get();
+                    $count = $checkpoints->count();
+
+                    if ($count === 0) {
+                        Notification::make()->title('No anchored checkpoints to verify')->info()->send();
+
+                        return;
+                    }
+
+                    $threshold = ChronicleFilamentPlugin::get()->getVerifyAllQueueThreshold();
+
+                    if ($count > $threshold) {
+                        VerifyAnchorsJob::dispatch(Auth::id());
+
+                        Notification::make()
+                            ->title('Anchor verification queued')
+                            ->body("Verifying anchors for $count checkpoints in the background; you'll be notified on completion.")
+                            ->info()
+                            ->send();
+
+                        return;
+                    }
+
+                    $result = app(AnchorVerifier::class)->verify($checkpoints);
+
+                    $notification = Notification::make()
+                        ->title($result->isValid() ? 'All anchors verified' : 'Anchor verification failed');
+
+                    $result->isValid()
+                        ? $notification->success()->send()
+                        : $notification->danger()->body('Failure: '.VerificationFailure::AnchorInvalid->name)->send();
+                }),
         ];
     }
 
@@ -109,6 +153,7 @@ class ListEntries extends ListRecords
     {
         return [
             VerificationHealthWidget::class,
+            AnchorCoverageWidget::class,
         ];
     }
 }

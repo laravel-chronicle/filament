@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 use Chronicle\Anchoring\AnchorManager;
-use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\AnchorState;
 use Chronicle\Filament\Support\VerificationResultStore;
+use Chronicle\Filament\Tests\Fixtures\ThrowingAnchorVerifier;
 use Chronicle\Verification\AnchorVerifier;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Support\Facades\DB;
@@ -105,13 +105,10 @@ it('surfaces a provider error non-destructively without recording', function () 
     $this->seedAnchor($ledger->lastCheckpointId);
 
     // Swap in a verifier whose anchor check throws, as a flaky provider would.
-    app()->bind(AnchorVerifier::class, fn (): AnchorVerifier => new readonly class(app(AnchorManager::class)) extends AnchorVerifier
-    {
-        public function checkpointHasValidAnchor(Checkpoint $checkpoint): bool
-        {
-            throw new RuntimeException('TSA timeout');
-        }
-    });
+    app()->bind(AnchorVerifier::class, fn (): AnchorVerifier => new ThrowingAnchorVerifier(
+        app(AnchorManager::class),
+        'TSA timeout',
+    ));
 
     $entry = Entry::query()->where('sequence', 2)->firstOrFail();
 
