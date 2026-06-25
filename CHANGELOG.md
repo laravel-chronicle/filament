@@ -5,6 +5,20 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0]
+
+`laravel-chronicle/filament` v1.2 - key-rotation visibility. Building on the read-only
+v1.1 panel, v1.2 surfaces which signing key signed each entry (from its checkpoint): an
+Active-vs-Retired state, a per-key view, and a key-ring summary. It is **display-only** -
+signature verification already happens inside core's chain/entry verifiers, so v1.2 adds
+**no** new verify action and the read-only invariant is unchanged.
+
+### Added
+
+- `Support\SigningKeyState`: string-backed enum (`active`/`retired`/`unsigned`) - the single source of truth for signing-key badge color, icon, and label, mirroring `VerificationState`/`AnchorState`. Derived from a checkpoint's stored `(algorithm, key_id)` versus core's active signing key; never runs a provider sign/verify.
+
+---
+
 ## [1.1.0] - 2026-06-24
 
 `laravel-chronicle/filament` v1.1 - external anchoring. Building on the read-only v1.0
