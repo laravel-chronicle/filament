@@ -466,6 +466,24 @@ class ChronicleEntryResource extends Resource
                     TextEntry::make('checkpoint.algorithm')->label('Algorithm')->placeholder('Unanchored'),
                     TextEntry::make('checkpoint.key_id')->label('Key ID')->placeholder('Unanchored'),
                     TextEntry::make('checkpoint.signature')->label('Signature')->placeholder('Unanchored')->copyable()->columnSpanFull(),
+                    // Active/Retired state of the signing key, derived from the
+                    // checkpoint's stored (algorithm, key_id) vs the active key.
+                    // Hidden when unsigned (no checkpoint) or the gate is off.
+                    TextEntry::make('signing_key_state')
+                        ->label('Key state')
+                        ->badge()
+                        ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled()
+                            && $record->checkpoint_id !== null)
+                        ->state(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->label())
+                        ->color(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->color())
+                        ->icon(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->icon()),
+                    // A retired key still verifies the artifacts it signed - say so.
+                    TextEntry::make('signing_key_hint')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled()
+                            && KeyRingSnapshot::make()->forEntry($record) === SigningKeyState::Retired)
+                        ->state('Retired key - still verifies historical entries.'),
                 ]),
             Section::make('Payload')
                 ->collapsible()
