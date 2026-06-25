@@ -11,6 +11,7 @@ use Chronicle\Anchoring\CheckpointDigest;
 use Chronicle\Anchoring\NullAnchor;
 use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\ChronicleServiceProvider;
+use Chronicle\Contracts\SigningProvider;
 use Chronicle\Filament\ChronicleFilamentServiceProvider;
 use Chronicle\Filament\Tests\Fixtures\TestPanelProvider;
 use Chronicle\Signing\Ed25519SigningProvider;
@@ -181,5 +182,48 @@ abstract class TestCase extends Orchestra
         ]);
 
         $this->app->forgetInstance(KeyRing::class);
+    }
+
+    /**
+     * Seed a 9-entry ledger that spans a real key rotation, for the K3 sweep:
+     *
+     *   - Entries 1-4: checkpoints (seq 2, 4) signed by the dev key A
+     *     (chronicle-dev-key) - which becomes Retired after the rotation.
+     *   - chronicle:key:rotate creates a boundary checkpoint signed by key A,
+     *     then we activate key B.
+     *   - Entries 5-8: checkpoints (seq 6, 8) signed by the now-active key B
+     *     (rotated-key) - Active.
+     *   - Entry 9: uncheckpointed - Unsigned.
+     *
+     * Key B reuses core's published dev keypair under a new id so signing
+     * succeeds; the surfaces only read the stored (algorithm, key_id).
+     */
+    protected function seedRotatedLedger(): void
+    {
+        // Phase A - seed under the active dev key (key A).
+        $this->seedLedger(count: 4, checkpointEvery: 2);
+
+        // Register key B with real signing material under a new id.
+        Config::set('chronicle.signing.keys.rotated-key', [
+            'provider' => Ed25519SigningProvider::class,
+            'algorithm' => 'ed25519',
+            'private_key' => 'RcSfC2MuYTPnkrL/MIA4/l/sAjirGXXIFXZEPokdwh1Lcz+SvNE7bjvgCsDotjnlHfJyZ4XW/kUXemtoyaa92Q==',
+            'public_key' => 'S3M/krzRO2474ArA6LY55R3ycmeF1v5FF3praMmmvdk=',
+        ]);
+        $this->app->forgetInstance(KeyRing::class);
+        $this->app->forgetInstance(SigningProvider::class);
+
+        // Rotate: boundary checkpoint is signed with the CURRENT active key (A);
+        // the command prints the activation instruction but does not mutate config.
+        $this->artisan('chronicle:key:rotate', ['newKeyId' => 'rotated-key'])->assertSuccessful();
+
+        // Activate key B and rebind the singletons so the next seed signs under B.
+        Config::set('chronicle.signing.active', 'rotated-key');
+        $this->app->forgetInstance(KeyRing::class);
+        $this->app->forgetInstance(SigningProvider::class);
+
+        // Phase B - seed under the now-active key B, then a trailing unsigned entry.
+        $this->seedLedger(count: 4, checkpointEvery: 2);
+        $this->seedLedger(count: 1);
     }
 }
