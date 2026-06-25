@@ -13,6 +13,8 @@ use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\ChronicleServiceProvider;
 use Chronicle\Filament\ChronicleFilamentServiceProvider;
 use Chronicle\Filament\Tests\Fixtures\TestPanelProvider;
+use Chronicle\Signing\Ed25519SigningProvider;
+use Chronicle\Signing\KeyRing;
 use Chronicle\Testing\LedgerSeeder;
 use Chronicle\Testing\SeededLedger;
 use Filament\Actions\ActionsServiceProvider;
@@ -150,5 +152,34 @@ abstract class TestCase extends Orchestra
         $anchor->save();
 
         return $anchor;
+    }
+
+    /**
+     * Relabel a seeded checkpoint's stored signing key id, so it derives a
+     * non-active (Retired) SigningKeyState. The seeder signs with the active
+     * dev key; this is the display-only way to simulate a key rotation without
+     * re-signing - K2/K3 only read the stored (algorithm, key_id).
+     */
+    protected function retireCheckpoint(string $checkpointId, string $keyId = 'old-key'): void
+    {
+        Checkpoint::query()->where('id', $checkpointId)->update(['key_id' => $keyId]);
+    }
+
+    /**
+     * Register a second, verify-only key in core's signing ring, so it appears as
+     * a "Signing key" filter option (KeyRing::all() drives the options). Uses
+     * core's published dev public key and rebinds the KeyRing singleton so the
+     * new key is visible. Pair with retireCheckpoint($id, $keyId) to put a
+     * checkpoint under it.
+     */
+    protected function registerRetiredKey(string $keyId = 'retired-key'): void
+    {
+        Config::set("chronicle.signing.keys.$keyId", [
+            'provider' => Ed25519SigningProvider::class,
+            'algorithm' => 'ed25519',
+            'public_key' => 'S3M/krzRO2474ArA6LY55R3ycmeF1v5FF3praMmmvdk=',
+        ]);
+
+        $this->app->forgetInstance(KeyRing::class);
     }
 }

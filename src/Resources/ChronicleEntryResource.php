@@ -13,8 +13,10 @@ use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\AnchorState;
+use Chronicle\Filament\Support\KeyRingSnapshot;
 use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
+use Chronicle\Filament\Support\SigningKeyState;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
 use Chronicle\Verification\AnchorVerifier;
@@ -189,6 +191,15 @@ class ChronicleEntryResource extends Resource
                     ->color(fn (Entry $record): string => AnchorState::forEntry($record)->color())
                     ->icon(fn (Entry $record): string => AnchorState::forEntry($record)->icon())
                     ->toggleable(),
+                TextColumn::make('signing_key')
+                    ->label('Signing key')
+                    ->badge()
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled())
+                    ->state(fn (Entry $record): string => $record->checkpoint->key_id ?? 'Unsigned')
+                    ->color(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->color())
+                    ->icon(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->icon())
+                    ->tooltip(fn (Entry $record): ?string => static::signingKeyTooltip($record))
+                    ->toggleable(),
             ])
             ->filters([
                 SelectFilter::make('action')
@@ -295,6 +306,24 @@ class ChronicleEntryResource extends Resource
                                 ->orWhereDoesntHave('checkpoint.anchors')),
                             default => $query,
                         };
+                    }),
+                SelectFilter::make('signing_key')
+                    ->label('Signing key')
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled())
+                    ->options(fn (): array => static::signingKeyFilterOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (! is_string($value) || $value === '') {
+                            return $query;
+                        }
+
+                        // Filter values are ring labels "{algorithm}:{keyId}".
+                        [$algorithm, $keyId] = array_pad(explode(':', $value, 2), 2, '');
+
+                        return $query->whereHas('checkpoint', fn (Builder $q): Builder => $q
+                            ->where('algorithm', $algorithm)
+                            ->where('key_id', $keyId));
                     }),
             ])
             ->recordActions([
@@ -437,6 +466,24 @@ class ChronicleEntryResource extends Resource
                     TextEntry::make('checkpoint.algorithm')->label('Algorithm')->placeholder('Unanchored'),
                     TextEntry::make('checkpoint.key_id')->label('Key ID')->placeholder('Unanchored'),
                     TextEntry::make('checkpoint.signature')->label('Signature')->placeholder('Unanchored')->copyable()->columnSpanFull(),
+                    // Active/Retired state of the signing key, derived from the
+                    // checkpoint's stored (algorithm, key_id) vs the active key.
+                    // Hidden when unsigned (no checkpoint) or the gate is off.
+                    TextEntry::make('signing_key_state')
+                        ->label('Key state')
+                        ->badge()
+                        ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled()
+                            && $record->checkpoint_id !== null)
+                        ->state(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->label())
+                        ->color(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->color())
+                        ->icon(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->icon()),
+                    // A retired key still verifies the artifacts it signed - say so.
+                    TextEntry::make('signing_key_hint')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled()
+                            && KeyRingSnapshot::make()->forEntry($record) === SigningKeyState::Retired)
+                        ->state('Retired key - still verifies historical entries.'),
                 ]),
             Section::make('Payload')
                 ->collapsible()
@@ -583,6 +630,44 @@ class ChronicleEntryResource extends Resource
         return $failure !== null
             ? "Last checked $when - failure: $failure"
             : "Last verified $when";
+    }
+
+    /**
+     * The signing-key column tooltip: the algorithm plus the derived state, with
+     * a retired-key reassurance. Null for an unsigned entry (no checkpoint).
+     * Reads the eager-loaded checkpoint metadata only - never a provider verify.
+     */
+    protected static function signingKeyTooltip(Entry $record): ?string
+    {
+        $checkpoint = $record->checkpoint;
+
+        if (! $checkpoint instanceof Checkpoint) {
+            return null;
+        }
+
+        $state = KeyRingSnapshot::make()->forCheckpoint($checkpoint);
+
+        return $state === SigningKeyState::Retired
+            ? $checkpoint->algorithm.' - retired key (still verifies historical entries)'
+            : $checkpoint->algorithm.' - '.$state->label();
+    }
+
+    /**
+     * Signing-key filter options keyed by the ring label "{algorithm}:{keyId}",
+     * built from KeyRingSnapshot::keys() (i.e. core's KeyRing::all()). The active
+     * key is suffixed "(active)". Reads provider metadata only - no verify.
+     *
+     * @return array<string, string>
+     */
+    protected static function signingKeyFilterOptions(): array
+    {
+        $options = [];
+
+        foreach (KeyRingSnapshot::make()->keys() as $label => $key) {
+            $options[$label] = $key['active'] ? $label.' (active)' : $label;
+        }
+
+        return $options;
     }
 
     /**
