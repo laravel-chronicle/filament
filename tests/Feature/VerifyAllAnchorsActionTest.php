@@ -45,6 +45,18 @@ it('queues the verify-all above the threshold instead of running it', function (
     Queue::assertPushed(VerifyAnchorsJob::class);
 });
 
+it('reports nothing to verify when no checkpoint carries an anchor', function () {
+    // Surface forced on at the plugin level with core off, so seeding does not
+    // auto-anchor; the checkpoints exist but carry no anchor rows, so the in-scope
+    // count is zero and the action short-circuits.
+    ChronicleFilamentPlugin::get()->anchoring();
+    $this->seedLedger(count: 2, checkpointEvery: 2);
+
+    Livewire::test(ListEntries::class)
+        ->callAction('verifyAllAnchors')
+        ->assertNotified('No anchored checkpoints to verify');
+});
+
 it('hides the verify-all action when anchoring is disabled', function () {
     // No enableAnchoring(): core anchoring stays off.
     $this->seedLedger(count: 2, checkpointEvery: 2);

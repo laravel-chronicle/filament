@@ -5,7 +5,14 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-06-24
+
+`laravel-chronicle/filament` v1.1 - external anchoring. Building on the read-only v1.0
+panel, v1.1 surfaces core's external checkpoint anchoring: a read-only anchor detail
+section, a deliberate Verify-anchor action, an anchor status column + filter, an
+anchor-coverage widget, and a deliberate "Verify all anchors" action (sync or queued).
+Anchor verification is always deliberate and read-only - the panel still can never rewrite
+history, and nothing verifies on a render path.
 
 ### Added
 
@@ -20,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `Widgets\AnchorCoverageWidget` (CHF-21): a `StatsOverviewWidget` on the list page summarising external-anchor coverage from cheap checkpoint table aggregates - checkpoints with an `anchored` anchor vs total, plus checkpoint-level `pending` and `failed` counts (respecting the anchored > failed > pending precedence) and the latest `anchored_at` - reading stored anchor `status` only, never running a provider verification on load. Mounted beside the verification health widget and hidden via `canView()` when anchoring is disabled.
 - Deliberate "Verify all anchors" header action (CHF-21): runs core's `AnchorVerifier::verify()` over the in-scope checkpoints (those carrying anchor rows) - synchronously below `anchoring.verify_all_queue_threshold` and via a queued `Jobs\VerifyAnchorsJob` above it, reusing the v1.0 queued-verify pattern and notifying the initiating user on completion (decoding `AnchorInvalid`). Gated behind the plugin `->authorize` closure and hidden when anchoring is disabled. Read-only - it reads and notifies, never mutating.
 - Hardened the v1.1 anchor test sweep (CHF-23): coverage-widget counts and the no-provider-verify-on-load guard, the queued "Verify all anchors" path (faking the queue) and its job notification, and an explicit re-assertion that the read-only invariant still holds - the list page exposes only the read-only `verifyChain`/`verifyAllAnchors` header actions, and no mutating route or action was added.
+- README anchoring documentation for v1.1 (CHF-24): the read-only detail anchor view, the deliberate Verify-anchor and "Verify all anchors" actions, the anchor column/filter, the coverage widget, the `->anchoring()` toggle and hidden-when-disabled behaviour, the new `anchoring.enabled` / `anchoring.verify_all_queue_threshold` config rows, the note that anchoring requires core anchoring configured (RFC 3161 TSA or the `anchor-s3` adapter), and anchor screenshot placeholders. Compatibility unchanged: core 1.13+.
 
 ---
 
@@ -61,5 +69,6 @@ surfaced as status badges and a health widget. The panel can never rewrite histo
 - README rewritten for v1.0: positioning lead (read-only, cannot rewrite history, the only Filament audit plugin with chain/entry/segment cryptographic verification), install + panel-registration snippet, full config reference (`entry_model`, navigation, slug, `verification.enabled`/`queue_threshold`/`store.connection`), compatibility matrix (PHP 8.2/8.4/8.5, Filament 4 & 5, Laravel 12 & 13, core 1.13+, `ext-sodium`/`ext-openssl` required), and screenshot placeholders.
 - Hardened the v1.0 test sweep: rendered-badge coverage for every stored status, a read-vs-verify separation guard, a `ViewEntry` no-header-action guard, and a confirmed-green gate (full Pest suite + PHPStan level 10 + Pint) across the CI matrix.
 
-[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/laravel-chronicle/filament/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/laravel-chronicle/filament/releases/tag/1.0.0
