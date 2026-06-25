@@ -307,6 +307,24 @@ class ChronicleEntryResource extends Resource
                             default => $query,
                         };
                     }),
+                SelectFilter::make('signing_key')
+                    ->label('Signing key')
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isSigningKeysEnabled())
+                    ->options(fn (): array => static::signingKeyFilterOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (! is_string($value) || $value === '') {
+                            return $query;
+                        }
+
+                        // Filter values are ring labels "{algorithm}:{keyId}".
+                        [$algorithm, $keyId] = array_pad(explode(':', $value, 2), 2, '');
+
+                        return $query->whereHas('checkpoint', fn (Builder $q): Builder => $q
+                            ->where('algorithm', $algorithm)
+                            ->where('key_id', $keyId));
+                    }),
             ])
             ->recordActions([
                 Action::make('verifyEntry')
@@ -614,6 +632,24 @@ class ChronicleEntryResource extends Resource
         return $state === SigningKeyState::Retired
             ? $checkpoint->algorithm.' - retired key (still verifies historical entries)'
             : $checkpoint->algorithm.' - '.$state->label();
+    }
+
+    /**
+     * Signing-key filter options keyed by the ring label "{algorithm}:{keyId}",
+     * built from KeyRingSnapshot::keys() (i.e. core's KeyRing::all()). The active
+     * key is suffixed "(active)". Reads provider metadata only - no verify.
+     *
+     * @return array<string, string>
+     */
+    protected static function signingKeyFilterOptions(): array
+    {
+        $options = [];
+
+        foreach (KeyRingSnapshot::make()->keys() as $label => $key) {
+            $options[$label] = $key['active'] ? $label.' (active)' : $label;
+        }
+
+        return $options;
     }
 
     /**
