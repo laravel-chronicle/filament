@@ -9,6 +9,7 @@ use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Chronicle\Filament\Support\VerificationResultStore;
+use Chronicle\Filament\Widgets\AnchorCoverageWidget;
 use Chronicle\Filament\Widgets\VerificationHealthWidget;
 use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
@@ -109,6 +110,7 @@ class ListEntries extends ListRecords
     {
         return [
             VerificationHealthWidget::class,
+            AnchorCoverageWidget::class,
         ];
     }
 }
