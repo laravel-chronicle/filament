@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Chronicle\Filament\Resources\ChronicleEntryResource\Pages;
 
+use Chronicle\Entry\Entry;
+use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
+use Chronicle\Filament\Support\SubjectErasureStore;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -15,6 +18,20 @@ use Filament\Resources\Pages\ViewRecord;
 class ViewEntry extends ViewRecord
 {
     protected static string $resource = ChronicleEntryResource::class;
+
+    /**
+     * Prime the crypto-shredding store for the viewed record, so the erasure
+     * detail section reads state/hold in two queries with no DEK unwrap. Skipped
+     * when the surfaces are off.
+     */
+    public function mount(int|string $record): void
+    {
+        parent::mount($record);
+
+        if (ChronicleFilamentPlugin::get()->isCryptoShreddingEnabled() && $this->record instanceof Entry) {
+            app(SubjectErasureStore::class)->prime([$this->record]);
+        }
+    }
 
     /**
      * @return array<Action>

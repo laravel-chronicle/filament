@@ -10,8 +10,10 @@ use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyAnchorsJob;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
+use Chronicle\Filament\Support\SubjectErasureStore;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Widgets\AnchorCoverageWidget;
+use Chronicle\Filament\Widgets\CryptoShreddingWidget;
 use Chronicle\Filament\Widgets\SigningKeyRingWidget;
 use Chronicle\Filament\Widgets\VerificationHealthWidget;
 use Chronicle\Verification\AnchorVerifier;
@@ -56,6 +58,21 @@ class ListEntries extends ListRecords
         }
 
         app(VerificationResultStore::class)->primeEntries($ids);
+
+        // Prime crypto-shredding state for the page in two queries, so the erasure
+        // column renders without per-row lookups. Skipped entirely when the
+        // surfaces are off, so a disabled panel pays nothing.
+        if (ChronicleFilamentPlugin::get()->isCryptoShreddingEnabled()) {
+            $entries = [];
+
+            foreach ($records instanceof Collection ? $records->all() : $records->items() as $record) {
+                if ($record instanceof Entry) {
+                    $entries[] = $record;
+                }
+            }
+
+            app(SubjectErasureStore::class)->prime($entries);
+        }
 
         return $records;
     }
@@ -156,6 +173,7 @@ class ListEntries extends ListRecords
             VerificationHealthWidget::class,
             AnchorCoverageWidget::class,
             SigningKeyRingWidget::class,
+            CryptoShreddingWidget::class,
         ];
     }
 }

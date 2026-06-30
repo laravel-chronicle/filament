@@ -100,3 +100,27 @@ it('issues no queries for an empty page', function () {
     expect(DB::getQueryLog())->toHaveCount(0);
     DB::disableQueryLog();
 });
+
+it('carries the active hold reason and placed-at, null when unheld', function () {
+    LegalHold::place('user', 'held-1', 'litigation', 'officer');
+
+    $store = SubjectErasureStore::forEntries([
+        entryFor('user', 'held-1'),
+        entryFor('user', 'free-1'),
+    ]);
+
+    expect($store->heldReasonFor(entryFor('user', 'held-1')))->toBe('litigation')
+        ->and($store->heldPlacedAtFor(entryFor('user', 'held-1')))->not->toBeNull()
+        ->and($store->heldReasonFor(entryFor('user', 'free-1')))->toBeNull()
+        ->and($store->heldPlacedAtFor(entryFor('user', 'free-1')))->toBeNull();
+});
+
+it('primes hold detail via the instance prime() method too', function () {
+    LegalHold::place('user', 'held-2', 'regulatory', 'officer');
+
+    $store = new SubjectErasureStore;
+    $store->prime([entryFor('user', 'held-2')]);
+
+    expect($store->isHeld(entryFor('user', 'held-2')))->toBeTrue()
+        ->and($store->heldReasonFor(entryFor('user', 'held-2')))->toBe('regulatory');
+});
