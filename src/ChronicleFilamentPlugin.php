@@ -39,6 +39,14 @@ final class ChronicleFilamentPlugin implements Plugin
 
     protected ?bool $signingKeys = null;
 
+    protected ?bool $cryptoShredding = null;
+
+    protected ?bool $erasure = null;
+
+    protected ?bool $eraseAllowHoldOverride = null;
+
+    protected ?Closure $eraseAuthorizeUsing = null;
+
     protected ?Closure $authorizeUsing = null;
 
     protected ?Closure $labelResolver = null;
@@ -142,6 +150,34 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this;
     }
 
+    public function cryptoShredding(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->cryptoShredding = $condition;
+
+        return $this;
+    }
+
+    public function erasure(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->erasure = $condition;
+
+        return $this;
+    }
+
+    public function eraseAllowHoldOverride(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->eraseAllowHoldOverride = $condition;
+
+        return $this;
+    }
+
+    public function eraseAuthorize(Closure $callback): ChronicleFilamentPlugin
+    {
+        $this->eraseAuthorizeUsing = $callback;
+
+        return $this;
+    }
+
     public function authorize(Closure $callback): ChronicleFilamentPlugin
     {
         $this->authorizeUsing = $callback;
@@ -225,6 +261,60 @@ final class ChronicleFilamentPlugin implements Plugin
     public function isSigningKeysEnabled(): bool
     {
         return $this->signingKeys ?? Config::boolean('chronicle-filament.signing_keys.enabled', true);
+    }
+
+    /**
+     * Whether the read-only crypto-shredding surfaces are enabled. Fluent
+     * override wins; otherwise the plugin's crypto_shredding.enabled config when
+     * set to a bool; otherwise follow core's chronicle.encryption.enabled
+     * (default false). Everything stays hidden when core encryption is off.
+     */
+    public function isCryptoShreddingEnabled(): bool
+    {
+        if ($this->cryptoShredding !== null) {
+            return $this->cryptoShredding;
+        }
+
+        $configured = Config::get('chronicle-filament.crypto_shredding.enabled');
+
+        if (is_bool($configured)) {
+            return $configured;
+        }
+
+        return Config::boolean('chronicle.encryption.enabled', false);
+    }
+
+    /**
+     * Whether the irreversible Erase-subject action is enabled. OFF BY DEFAULT
+     * and independent of the visibility toggle. Fluent override wins; otherwise
+     * the plugin's erasure.enabled config (default false).
+     */
+    public function isErasureEnabled(): bool
+    {
+        return $this->erasure ?? Config::boolean('chronicle-filament.erasure.enabled', false);
+    }
+
+    /**
+     * Whether an erase may override an active legal hold. OFF BY DEFAULT. Fluent
+     * override wins; otherwise erasure.allow_hold_override config (default false).
+     */
+    public function isEraseHoldOverrideAllowed(): bool
+    {
+        return $this->eraseAllowHoldOverride ?? Config::boolean('chronicle-filament.erasure.allow_hold_override', false);
+    }
+
+    /**
+     * Whether the current user may run the Erase-subject action. SEPARATE from
+     * canVerify() and DENY BY DEFAULT: with no eraseAuthorize() closure set the
+     * action can never run. Never the verify/read gate.
+     */
+    public function canErase(?Model $record = null): bool
+    {
+        if ($this->eraseAuthorizeUsing === null) {
+            return false;
+        }
+
+        return (bool) ($this->eraseAuthorizeUsing)($record);
     }
 
     public function getVerifyAllQueueThreshold(): int

@@ -101,4 +101,42 @@ return [
         'enabled' => true,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Crypto-shredding visibility (v1.3)
+    |--------------------------------------------------------------------------
+    |
+    | enabled  Master toggle for the read-only crypto-shredding surfaces (the
+    |          erasure column/filter, detail, hold view, and widget - wired in
+    |          S2). null follows core's chronicle.encryption.enabled; set true or
+    |          false to force. Everything stays hidden when core encryption is off.
+    |
+    */
+
+    'crypto_shredding' => [
+        'enabled' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Subject erasure (GDPR Article 17) (v1.3)
+    |--------------------------------------------------------------------------
+    |
+    | enabled              Master toggle for the irreversible Erase-subject action
+    |                      (wired in S3). OFF BY DEFAULT and independent of the
+    |                      visibility toggle - the action is absent and non-routable
+    |                      unless this is true.
+    | allow_hold_override  Whether an operator may erase a subject under an active
+    |                      legal hold (with a distinct confirmation). OFF BY DEFAULT.
+    |
+    | The action is ALSO gated on ChronicleFilamentPlugin::eraseAuthorize(), which
+    | DEFAULTS TO DENY - so enabling here alone never makes erasure reachable.
+    |
+    */
+
+    'erasure' => [
+        'enabled' => false,
+        'allow_hold_override' => false,
+    ],
+
 ];
