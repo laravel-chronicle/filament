@@ -17,6 +17,7 @@ entries, their hashes, and their signatures are never altered and still verify.
 ### Added
 
 - Confirmed core 1.13's crypto-shredding surface - `Chronicle::eraseSubject()` (DEK destroy + appended `subject.erased` proof, idempotent), the `SubjectKey` model (`status`/`erased_at`/`kek_id`, readable without unwrapping a DEK), `SubjectKeyManager::stateFor`, `LegalHold::{isHeld,scopeActiveFor}`, `KeyEncryptionManager::provider()->kekId()`, and `Entry::erased()` - recorded in `docs/chronicle-filament-v1.3-S1-core-confirmation.md`.
+- `Support\ErasureState` - string-backed enum (`encrypted`/`erased`/`not_encrypted`) that is the single source of truth for the erasure badge color, icon, and label, mirroring `VerificationState`/`AnchorState`/`SigningKeyState`. Derived from a subject's `SubjectKey` status only; legal hold is carried separately. Never unwraps a DEK, decrypts, or erases.
 
 ---
 ## [1.2.0] - 2026-06-25
