@@ -5,6 +5,23 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+`laravel-chronicle/filament` v1.3 - crypto-shredding / GDPR erasure. Building on the
+read-only v1.2 panel, v1.3 surfaces core's crypto-shredding state (encryption / erasure /
+legal hold / KEK) **read-only** and adds one opt-in, off-by-default, separately-authorized
+**Erase subject (GDPR)** action. The ledger stays immutable: erasure destroys the subject's
+DEK in the key store and **appends** a hash-chained, signed `subject.erased` proof - existing
+entries, their hashes, and their signatures are never altered and still verify.
+
+### Added
+
+- Confirmed core 1.13's crypto-shredding surface - `Chronicle::eraseSubject()` (DEK destroy + appended `subject.erased` proof, idempotent), the `SubjectKey` model (`status`/`erased_at`/`kek_id`, readable without unwrapping a DEK), `SubjectKeyManager::stateFor`, `LegalHold::{isHeld,scopeActiveFor}`, `KeyEncryptionManager::provider()->kekId()`, and `Entry::erased()` - recorded in `docs/chronicle-filament-v1.3-S1-core-confirmation.md`.
+- `Support\ErasureState` - string-backed enum (`encrypted`/`erased`/`not_encrypted`) that is the single source of truth for the erasure badge color, icon, and label, mirroring `VerificationState`/`AnchorState`/`SigningKeyState`. Derived from a subject's `SubjectKey` status only; legal hold is carried separately. Never unwraps a DEK, decrypts, or erases.
+- `Support\SubjectErasureStore` - a per-page priming store that batch-reads core's `SubjectKey` (status/erased_at/kek_id) and active `LegalHold` rows for a page's distinct `(subject_type, subject_id)` pairs in two queries total, memoised; per-entry `stateFor()`/`isHeld()`/`erasedAtFor()`/`kekIdFor()` are then query-free. Reads status only - no DEK unwrap, no decrypt, no erase; degrades to `NotEncrypted`/unheld when no rows exist. Adds the `TestCase::enableEncryption()` fixture.
+- crypto-shredding / erasure config + gates. New `crypto_shredding.enabled` (null follows `chronicle.encryption.enabled`), `erasure.enabled` (default **false**), and `erasure.allow_hold_override` (default **false**) config blocks. New `ChronicleFilamentPlugin` fluent toggles + getters: `->cryptoShredding()`/`isCryptoShreddingEnabled()`, `->erasure()`/`isErasureEnabled()`, `->eraseAllowHoldOverride()`/`isEraseHoldOverrideAllowed()`, and `->eraseAuthorize()`/`canErase()` - the erase gate is **off by default and denies by default**, separate from the verify gate, and unreachable unless both the flag and an authorize closure are set.
+
+---
 ## [1.2.0] - 2026-06-25
 
 `laravel-chronicle/filament` v1.2 - key-rotation visibility. Building on the read-only

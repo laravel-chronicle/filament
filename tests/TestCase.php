@@ -12,6 +12,7 @@ use Chronicle\Anchoring\NullAnchor;
 use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\ChronicleServiceProvider;
 use Chronicle\Contracts\SigningProvider;
+use Chronicle\Encryption\LocalKeyEncryptionProvider;
 use Chronicle\Filament\ChronicleFilamentServiceProvider;
 use Chronicle\Filament\Tests\Fixtures\TestPanelProvider;
 use Chronicle\Signing\Ed25519SigningProvider;
@@ -126,6 +127,21 @@ abstract class TestCase extends Orchestra
     {
         Config::set('chronicle.anchoring.enabled', true);
         Config::set('chronicle.anchoring.providers.null.provider', NullAnchor::class);
+    }
+
+    /**
+     * Turn core encryption on with the local KEK provider, so erased/encrypted
+     * subjects can be seeded through core's own pipeline. Reads status only on the
+     * plugin side - the DEK is never unwrapped by the surfaces under test.
+     */
+    protected function enableEncryption(string $kekId = 'local'): void
+    {
+        Config::set('chronicle.encryption.enabled', true);
+        Config::set('chronicle.encryption.kek', [
+            'provider' => LocalKeyEncryptionProvider::class,
+            'key' => base64_encode(random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES)),
+            'id' => $kekId,
+        ]);
     }
 
     /**
