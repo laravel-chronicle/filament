@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Chronicle\Filament\Resources;
 
 use BackedEnum;
+use Carbon\CarbonInterface;
 use Chronicle\Anchoring\CheckpointAnchor;
 use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\Encryption\SubjectKey;
@@ -599,6 +600,35 @@ class ChronicleEntryResource extends Resource
                     TextEntry::make('erased')
                         ->label('Subject erased')
                         ->state(fn (Entry $record): string => $record->erased() ? 'Yes (crypto-shredded)' : 'No'),
+                ]),
+            Section::make('Subject erasure')
+                ->columns()
+                ->collapsible()
+                ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isCryptoShreddingEnabled())
+                ->components([
+                    TextEntry::make('erasure_state')
+                        ->label('State')
+                        ->badge()
+                        ->state(fn (Entry $record): string => app(SubjectErasureStore::class)->stateFor($record)->label())
+                        ->color(fn (Entry $record): string => app(SubjectErasureStore::class)->stateFor($record)->color())
+                        ->icon(fn (Entry $record): string => app(SubjectErasureStore::class)->stateFor($record)->icon()),
+                    TextEntry::make('erasure_hold')
+                        ->label('Legal hold')
+                        ->state(fn (Entry $record): string => app(SubjectErasureStore::class)->isHeld($record) ? 'On hold' : 'None'),
+                    TextEntry::make('erasure_kek')
+                        ->label('Wrapping KEK')
+                        ->placeholder('-')
+                        ->state(fn (Entry $record): ?string => app(SubjectErasureStore::class)->kekIdFor($record)),
+                    TextEntry::make('erasure_erased_at')
+                        ->label('Erased at')
+                        ->dateTime()
+                        ->placeholder('-')
+                        ->state(fn (Entry $record): ?CarbonInterface => app(SubjectErasureStore::class)->erasedAtFor($record)),
+                    TextEntry::make('erasure_notice')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->visible(fn (Entry $record): bool => app(SubjectErasureStore::class)->stateFor($record) === ErasureState::Erased)
+                        ->state("This subject's personal data has been crypto-shredded and is permanently unreadable. The entry itself is unchanged and still verifies - its hash chain and signature are intact."),
                 ]),
             Section::make('External anchoring')
                 ->collapsible()
