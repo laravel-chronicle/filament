@@ -13,6 +13,7 @@ use Chronicle\Filament\Resources\ChronicleEntryResource;
 use Chronicle\Filament\Support\SubjectErasureStore;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Widgets\AnchorCoverageWidget;
+use Chronicle\Filament\Widgets\CryptoShreddingWidget;
 use Chronicle\Filament\Widgets\SigningKeyRingWidget;
 use Chronicle\Filament\Widgets\VerificationHealthWidget;
 use Chronicle\Verification\AnchorVerifier;
@@ -172,6 +173,7 @@ class ListEntries extends ListRecords
             VerificationHealthWidget::class,
             AnchorCoverageWidget::class,
             SigningKeyRingWidget::class,
+            CryptoShreddingWidget::class,
         ];
     }
 }

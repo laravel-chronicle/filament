@@ -5,7 +5,7 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.3.0]
 
 `laravel-chronicle/filament` v1.3 - crypto-shredding / GDPR erasure. Building on the
 read-only v1.2 panel, v1.3 surfaces core's crypto-shredding state (encryption / erasure /
@@ -23,6 +23,8 @@ entries, their hashes, and their signatures are never altered and still verify.
 - `ChronicleEntryResource` "Erasure" table column + filters: a `SubjectErasureState`-colored badge (Encrypted / Erased / Not encrypted) with an "On hold" indicator and a KEK/erased-at/hold tooltip, plus filters by erasure state and by legal hold (correlated `whereExists`/`whereNotExists` over core's `SubjectKey`/`LegalHold`). State comes from the `SubjectErasureStore`, now primed once per render as a container singleton - the column renders in a flat two queries, with no per-row lookup and no DEK unwrap. Gated on `->cryptoShredding()`; hidden when core encryption is off.
 - `ChronicleEntryResource` ViewEntry "Subject erasure" detail section: shows the subject's `ErasureState` badge, wrapping `kek_id`, `erased_at`, and active legal-hold status; an erased subject gets a plain statement that its personal data is permanently unreadable **while the entry stays intact and still verifies**. The detail page primes the `SubjectErasureStore` for the single record (two queries, no DEK unwrap). Gated on `->cryptoShredding()`; hidden when core encryption is off.
 - `ChronicleEntryResource` `subject.erased` proof trail: an "Erasure proofs only" table preset filtering to `action = 'subject.erased'`, with the requester and reason surfaced from the proof entry's plain metadata on the detail page. The `SubjectErasureStore` now also carries each active hold's reason and placed-at (`heldReasonFor()`/`heldPlacedAtFor()`), surfaced in the erasure detail section. Read-only; gated on `->cryptoShredding()`.
+- `CryptoShreddingWidget`: a `StatsOverviewWidget` on the list-page header summarising encrypted subjects, erased subjects, subjects on active legal hold, and the active KEK id - from one grouped `SubjectKey` aggregate, one active-`LegalHold` count, and a guarded `KeyEncryptionManager::provider()->kekId()` read (no unwrap, no per-row query). Mounts only when `->cryptoShredding()` is enabled.
+
 ---
 ## [1.2.0] - 2026-06-25
 
