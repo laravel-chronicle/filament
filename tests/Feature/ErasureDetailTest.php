@@ -5,8 +5,10 @@ declare(strict_types=1);
 use Chronicle\Encryption\SubjectKey;
 use Chronicle\Encryption\SubjectKeyManager;
 use Chronicle\Entry\Entry;
+use Chronicle\Facades\Chronicle;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
+use Chronicle\Lifecycle\LegalHold;
 use Livewire\Livewire;
 
 it('shows the erasure state, KEK, and erased-at for an erased subject', function () {
@@ -52,4 +54,34 @@ it('hides the erasure section when crypto-shredding is off', function () {
     Livewire::test(ViewEntry::class, ['record' => $entry->getKey()])
         ->assertOk()
         ->assertDontSee('Subject erasure');
+});
+
+it('surfaces the requester and reason on a subject.erased proof entry', function () {
+    $this->enableEncryption();
+
+    Chronicle::record()
+        ->actor((object) ['id' => 'officer'])
+        ->action('subject.erased')
+        ->subject((object) ['id' => '99'])
+        ->metadata(['requester' => 'officer', 'reason' => 'GDPR erasure request'])
+        ->commit();
+
+    $entry = Entry::query()->where('action', 'subject.erased')->firstOrFail();
+
+    Livewire::test(ViewEntry::class, ['record' => $entry->getKey()])
+        ->assertOk()
+        ->assertSee('officer')
+        ->assertSee('GDPR erasure request');
+});
+
+it('surfaces the active hold reason and placed-at in detail', function () {
+    $this->seedLedger(count: 1); // subject stdClass:1
+    $this->enableEncryption();
+    LegalHold::place('stdClass', '1', 'litigation hold', 'officer');
+
+    $entry = Entry::query()->where('subject_id', '1')->firstOrFail();
+
+    Livewire::test(ViewEntry::class, ['record' => $entry->getKey()])
+        ->assertOk()
+        ->assertSee('litigation hold');
 });

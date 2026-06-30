@@ -408,6 +408,10 @@ class ChronicleEntryResource extends Resource
                             ? $query->whereExists(fn (QueryBuilder $sub) => $correlate($sub))
                             : $query->whereNotExists(fn (QueryBuilder $sub) => $correlate($sub));
                     }),
+                Filter::make('erasure_proofs')
+                    ->label('Erasure proofs only')
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isCryptoShreddingEnabled())
+                    ->query(fn (Builder $query): Builder => $query->where('action', 'subject.erased')),
             ])
             ->recordActions([
                 Action::make('verifyEntry')
@@ -624,6 +628,28 @@ class ChronicleEntryResource extends Resource
                         ->dateTime()
                         ->placeholder('-')
                         ->state(fn (Entry $record): ?CarbonInterface => app(SubjectErasureStore::class)->erasedAtFor($record)),
+                    TextEntry::make('erasure_requester')
+                        ->label('Requested by')
+                        ->placeholder('-')
+                        ->visible(fn (Entry $record): bool => $record->action === 'subject.erased')
+                        ->state(fn (Entry $record): string => static::erasureMetadata($record, 'requester')),
+                    TextEntry::make('erasure_reason')
+                        ->label('Reason')
+                        ->placeholder('-')
+                        ->columnSpanFull()
+                        ->visible(fn (Entry $record): bool => $record->action === 'subject.erased')
+                        ->state(fn (Entry $record): string => static::erasureMetadata($record, 'reason')),
+                    TextEntry::make('erasure_hold_reason')
+                        ->label('Hold reason')
+                        ->placeholder('-')
+                        ->visible(fn (Entry $record): bool => app(SubjectErasureStore::class)->isHeld($record))
+                        ->state(fn (Entry $record): ?string => app(SubjectErasureStore::class)->heldReasonFor($record)),
+                    TextEntry::make('erasure_hold_placed_at')
+                        ->label('Hold placed at')
+                        ->dateTime()
+                        ->placeholder('-')
+                        ->visible(fn (Entry $record): bool => app(SubjectErasureStore::class)->isHeld($record))
+                        ->state(fn (Entry $record): ?CarbonInterface => app(SubjectErasureStore::class)->heldPlacedAtFor($record)),
                     TextEntry::make('erasure_notice')
                         ->hiddenLabel()
                         ->columnSpanFull()
@@ -796,6 +822,19 @@ class ChronicleEntryResource extends Resource
         }
 
         return $parts === [] ? null : implode(' - ', $parts);
+    }
+
+    /**
+     * Read a string key off a subject.erased proof entry's plain metadata (the
+     * erasure requester/reason), defaulting to '-'. The proof's metadata is the
+     * audit record of the erasure, not the erased subject's PII - it is never
+     * encrypted, so this reads the cast array directly.
+     */
+    protected static function erasureMetadata(Entry $record, string $key): string
+    {
+        $value = $record->metadata[$key] ?? null;
+
+        return is_scalar($value) ? (string) $value : '-';
     }
 
     /**

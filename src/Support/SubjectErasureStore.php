@@ -25,12 +25,12 @@ final class SubjectErasureStore
     /**
      * @var array<string, array{state: ErasureState, erasedAt: ?CarbonInterface, kekId: ?string}>
      */
-    private array $subjects = [];
+    protected array $subjects = [];
 
     /**
-     * @var array<string, true>
+     * @var array<string, array{placedAt: ?CarbonInterface, reason: ?string}>
      */
-    private array $held = [];
+    protected array $held = [];
 
     /**
      * @param  iterable<Entry>  $entries
@@ -129,6 +129,20 @@ final class SubjectErasureStore
         return $key !== null && isset($this->held[$key]);
     }
 
+    public function heldReasonFor(Entry $entry): ?string
+    {
+        $key = $this->keyForEntry($entry);
+
+        return $key === null ? null : ($this->held[$key]['reason'] ?? null);
+    }
+
+    public function heldPlacedAtFor(Entry $entry): ?CarbonInterface
+    {
+        $key = $this->keyForEntry($entry);
+
+        return $key === null ? null : ($this->held[$key]['placedAt'] ?? null);
+    }
+
     public function erasedAtFor(Entry $entry): ?CarbonInterface
     {
         $key = $this->keyForEntry($entry);
@@ -146,7 +160,7 @@ final class SubjectErasureStore
     /**
      * @param  list<array{0: string, 1: string}>  $pairs
      */
-    private function primeSubjects(array $pairs): void
+    protected function primeSubjects(array $pairs): void
     {
         $rows = SubjectKey::query()
             ->where(function (Builder $query) use ($pairs): void {
@@ -171,7 +185,7 @@ final class SubjectErasureStore
     /**
      * @param  list<array{0: string, 1: string}>  $pairs
      */
-    private function primeHolds(array $pairs): void
+    protected function primeHolds(array $pairs): void
     {
         $rows = LegalHold::query()
             ->whereNull('released_at')
@@ -182,15 +196,18 @@ final class SubjectErasureStore
                     });
                 }
             })
-            ->get(['subject_type', 'subject_id']);
+            ->get(['subject_type', 'subject_id', 'reason', 'placed_at']);
 
         foreach ($rows as $row) {
             /** @var LegalHold $row */
-            $this->held[self::key($row->subject_type, $row->subject_id)] = true;
+            $this->held[self::key($row->subject_type, $row->subject_id)] = [
+                'placedAt' => $row->placed_at,
+                'reason' => $row->reason,
+            ];
         }
     }
 
-    private function keyForEntry(Entry $entry): ?string
+    protected function keyForEntry(Entry $entry): ?string
     {
         $type = $entry->subject_type;
         $id = $entry->subject_id;
@@ -202,7 +219,7 @@ final class SubjectErasureStore
         return self::key($type, $id);
     }
 
-    private static function key(string $type, string $id): string
+    protected static function key(string $type, string $id): string
     {
         return $type."\0".$id;
     }
