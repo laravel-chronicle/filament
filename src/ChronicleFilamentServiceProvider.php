@@ -6,6 +6,7 @@ namespace Chronicle\Filament;
 
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\Policies\EntryPolicy;
+use Chronicle\Filament\Support\SubjectErasureStore;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
@@ -39,6 +40,9 @@ final class ChronicleFilamentServiceProvider extends PackageServiceProvider
         // during boot/route registration when no panel is "current" yet.
         $this->app->singleton(ChronicleFilamentPlugin::class);
         $this->app->singleton(VerificationResultStore::class);
+        // Shared so a render's prime() (list page / detail page) is visible to the
+        // erasure column and detail closures - mirrors VerificationResultStore.
+        $this->app->singleton(SubjectErasureStore::class);
     }
 
     /**

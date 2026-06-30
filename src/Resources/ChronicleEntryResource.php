@@ -7,18 +7,22 @@ namespace Chronicle\Filament\Resources;
 use BackedEnum;
 use Chronicle\Anchoring\CheckpointAnchor;
 use Chronicle\Checkpoints\Checkpoint;
+use Chronicle\Encryption\SubjectKey;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ViewEntry;
 use Chronicle\Filament\Support\AnchorState;
+use Chronicle\Filament\Support\ErasureState;
 use Chronicle\Filament\Support\KeyRingSnapshot;
 use Chronicle\Filament\Support\PreviousHash;
 use Chronicle\Filament\Support\ReferenceLabel;
 use Chronicle\Filament\Support\SigningKeyState;
+use Chronicle\Filament\Support\SubjectErasureStore;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Support\VerificationState;
+use Chronicle\Lifecycle\LegalHold;
 use Chronicle\Verification\AnchorVerifier;
 use Chronicle\Verification\EntryVerifier;
 use Chronicle\Verification\IntegrityVerifier;
@@ -43,9 +47,11 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Stringable;
 use Throwable;
 use UnitEnum;
@@ -200,6 +206,16 @@ class ChronicleEntryResource extends Resource
                     ->icon(fn (Entry $record): string => KeyRingSnapshot::make()->forEntry($record)->icon())
                     ->tooltip(fn (Entry $record): ?string => static::signingKeyTooltip($record))
                     ->toggleable(),
+                TextColumn::make('erasure_state')
+                    ->label('Erasure')
+                    ->badge()
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isCryptoShreddingEnabled())
+                    ->state(fn (Entry $record): string => app(SubjectErasureStore::class)->stateFor($record)->label())
+                    ->color(fn (Entry $record): string => app(SubjectErasureStore::class)->stateFor($record)->color())
+                    ->icon(fn (Entry $record): string => app(SubjectErasureStore::class)->stateFor($record)->icon())
+                    ->description(fn (Entry $record): ?string => app(SubjectErasureStore::class)->isHeld($record) ? 'On hold' : null)
+                    ->tooltip(fn (Entry $record): ?string => static::erasureTooltip($record))
+                    ->toggleable(),
             ])
             ->filters([
                 SelectFilter::make('action')
@@ -324,6 +340,72 @@ class ChronicleEntryResource extends Resource
                         return $query->whereHas('checkpoint', fn (Builder $q): Builder => $q
                             ->where('algorithm', $algorithm)
                             ->where('key_id', $keyId));
+                    }),
+                SelectFilter::make('erasure_state')
+                    ->label('Erasure')
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isCryptoShreddingEnabled())
+                    ->options([
+                        'encrypted' => 'Encrypted',
+                        'erased' => 'Erased',
+                        'not_encrypted' => 'Not encrypted',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (! is_string($value) || $value === '') {
+                            return $query;
+                        }
+
+                        $keys = (new SubjectKey)->getTable();
+                        $entries = $query->getModel()->getTable();
+
+                        $correlate = function (QueryBuilder $sub) use ($keys, $entries): QueryBuilder {
+                            return $sub->select(DB::raw(1))
+                                ->from($keys)
+                                ->whereColumn("$keys.subject_type", "$entries.subject_type")
+                                ->whereColumn("$keys.subject_id", "$entries.subject_id");
+                        };
+
+                        return match (ErasureState::from($value)) {
+                            ErasureState::Encrypted => $query->whereExists(
+                                fn (QueryBuilder $sub) => $correlate($sub)->where('status', 'active'),
+                            ),
+                            ErasureState::Erased => $query->whereExists(
+                                fn (QueryBuilder $sub) => $correlate($sub)->where('status', 'erased'),
+                            ),
+                            ErasureState::NotEncrypted => $query->whereNotExists(
+                                fn (QueryBuilder $sub) => $correlate($sub),
+                            ),
+                        };
+                    }),
+                SelectFilter::make('legal_hold')
+                    ->label('Legal hold')
+                    ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isCryptoShreddingEnabled())
+                    ->options([
+                        'held' => 'On hold',
+                        'released' => 'Not on hold',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (! is_string($value) || $value === '') {
+                            return $query;
+                        }
+
+                        $holds = (new LegalHold)->getTable();
+                        $entries = $query->getModel()->getTable();
+
+                        $correlate = function (QueryBuilder $sub) use ($holds, $entries): QueryBuilder {
+                            return $sub->select(DB::raw(1))
+                                ->from($holds)
+                                ->whereColumn("$holds.subject_type", "$entries.subject_type")
+                                ->whereColumn("$holds.subject_id", "$entries.subject_id")
+                                ->whereNull("$holds.released_at");
+                        };
+
+                        return $value === 'held'
+                            ? $query->whereExists(fn (QueryBuilder $sub) => $correlate($sub))
+                            : $query->whereNotExists(fn (QueryBuilder $sub) => $correlate($sub));
                     }),
             ])
             ->recordActions([
@@ -650,6 +732,40 @@ class ChronicleEntryResource extends Resource
         return $state === SigningKeyState::Retired
             ? $checkpoint->algorithm.' - retired key (still verifies historical entries)'
             : $checkpoint->algorithm.' - '.$state->label();
+    }
+
+    /**
+     * The erasure column tooltip: the wrapping KEK and erased-at for an
+     * encrypted/erased subject, plus a legal-hold note. Null for a never-encrypted
+     * subject. Reads the primed SubjectErasureStore only - no DEK unwrap.
+     */
+    protected static function erasureTooltip(Entry $record): ?string
+    {
+        $store = app(SubjectErasureStore::class);
+        $state = $store->stateFor($record);
+
+        if ($state === ErasureState::NotEncrypted) {
+            return $store->isHeld($record) ? 'On legal hold' : null;
+        }
+
+        $parts = [];
+        $kekId = $store->kekIdFor($record);
+
+        if ($kekId !== null) {
+            $parts[] = "KEK: $kekId";
+        }
+
+        $erasedAt = $store->erasedAtFor($record);
+
+        if ($erasedAt !== null) {
+            $parts[] = 'Erased '.$erasedAt->diffForHumans();
+        }
+
+        if ($store->isHeld($record)) {
+            $parts[] = 'On legal hold';
+        }
+
+        return $parts === [] ? null : implode(' - ', $parts);
     }
 
     /**

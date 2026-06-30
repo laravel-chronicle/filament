@@ -37,6 +37,41 @@ final class SubjectErasureStore
      */
     public static function forEntries(iterable $entries): self
     {
+        return self::forPairs(self::pairsFromEntries($entries));
+    }
+
+    /**
+     * Prime this instance for a page of entries: reset, then batch-read SubjectKey
+     * + active LegalHold for the distinct subjects in two queries (zero for an
+     * empty page). Lets the store work as a request-scoped singleton the list and
+     * detail pages prime once per render, so column closures read query-free.
+     *
+     * @param  iterable<Entry>  $entries
+     */
+    public function prime(iterable $entries): void
+    {
+        $this->subjects = [];
+        $this->held = [];
+
+        $pairs = self::pairsFromEntries($entries);
+
+        if ($pairs === []) {
+            return;
+        }
+
+        $this->primeSubjects($pairs);
+        $this->primeHolds($pairs);
+    }
+
+    /**
+     * Distinct (subject_type, subject_id) pairs for a set of entries, skipping any
+     * entry with a null subject.
+     *
+     * @param  iterable<Entry>  $entries
+     * @return list<array{0: string, 1: string}>
+     */
+    protected static function pairsFromEntries(iterable $entries): array
+    {
         $pairs = [];
 
         foreach ($entries as $entry) {
@@ -50,7 +85,7 @@ final class SubjectErasureStore
             $pairs[self::key($type, $id)] = [$type, $id];
         }
 
-        return self::forPairs(array_values($pairs));
+        return array_values($pairs);
     }
 
     /**
