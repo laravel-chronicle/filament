@@ -5,6 +5,20 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+`laravel-chronicle/filament` v1.3 - crypto-shredding / GDPR erasure. Building on the
+read-only v1.2 panel, v1.3 surfaces core's crypto-shredding state (encryption / erasure /
+legal hold / KEK) **read-only** and adds one opt-in, off-by-default, separately-authorized
+**Erase subject (GDPR)** action. The ledger stays immutable: erasure destroys the subject's
+DEK in the key store and **appends** a hash-chained, signed `subject.erased` proof - existing
+entries, their hashes, and their signatures are never altered and still verify.
+
+### Added
+
+- Confirmed core 1.13's crypto-shredding surface - `Chronicle::eraseSubject()` (DEK destroy + appended `subject.erased` proof, idempotent), the `SubjectKey` model (`status`/`erased_at`/`kek_id`, readable without unwrapping a DEK), `SubjectKeyManager::stateFor`, `LegalHold::{isHeld,scopeActiveFor}`, `KeyEncryptionManager::provider()->kekId()`, and `Entry::erased()` - recorded in `docs/chronicle-filament-v1.3-S1-core-confirmation.md`.
+
+---
 ## [1.2.0] - 2026-06-25
 
 `laravel-chronicle/filament` v1.2 - key-rotation visibility. Building on the read-only
