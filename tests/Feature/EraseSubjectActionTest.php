@@ -206,6 +206,27 @@ it('treats a re-erase as a friendly no-op', function () {
     expect(Entry::query()->where('action', 'subject.erased')->count())->toBe(1);
 });
 
+it('re-checks the gate inside the action closure and refuses when denied (defense in depth)', function () {
+    $this->enableEncryption();
+    // Enabled but authorization DENIES: visible() would hide the action, so
+    // Filament never mounts it in the UI. This proves the closure's own gate
+    // re-check (canEraseSubject) still refuses a crafted call that reaches it
+    // directly - defense in depth - appending no subject.erased proof.
+    enableErase(authorize: false);
+    $this->seedLedger(count: 1);
+    app(SubjectKeyManager::class)->getOrCreate('stdClass', '1');
+
+    $entry = Entry::query()->where('subject_id', '1')->firstOrFail();
+
+    $closure = ChronicleEntryResource::eraseSubjectAction()->getActionFunction();
+    expect($closure)->not->toBeNull();
+
+    // Invoke the action closure directly, bypassing Filament's visibility guard.
+    $closure($entry, eraseData($entry));
+
+    expect(Entry::query()->where('action', 'subject.erased')->count())->toBe(0);
+});
+
 it('exposes the erase action on the detail-view header', function () {
     $this->enableEncryption();
     enableErase();

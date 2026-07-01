@@ -124,3 +124,17 @@ it('primes hold detail via the instance prime() method too', function () {
     expect($store->isHeld(entryFor('user', 'held-2')))->toBeTrue()
         ->and($store->heldReasonFor(entryFor('user', 'held-2')))->toBe('regulatory');
 });
+
+it('issues no queries when the instance prime() gets an empty page', function () {
+    // The subject-less page short-circuits before any SubjectKey/LegalHold read.
+    DB::enableQueryLog();
+
+    $store = new SubjectErasureStore;
+    $store->prime([entryFor(null, null)]);
+
+    expect(DB::getQueryLog())->toHaveCount(0)
+        ->and($store->isHeld(entryFor('user', 'x')))->toBeFalse()
+        ->and($store->stateFor(entryFor('user', 'x')))->toBe(ErasureState::NotEncrypted);
+
+    DB::disableQueryLog();
+});
