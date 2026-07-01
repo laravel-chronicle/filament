@@ -21,6 +21,10 @@ model is immutable at the data layer. The UI is defence in depth on top of that.
 - ![Anchor column and Verify-anchor action](docs/screenshots/anchor-verify.png) <!-- placeholder -->
 - ![Signing-key column and Active/Retired badge](docs/screenshots/signing-key.png) <!-- placeholder -->
 - ![Key-ring summary widget](docs/screenshots/key-ring-widget.png) <!-- placeholder -->
+- ![Erasure column with On-hold indicator](docs/screenshots/erasure-column.png) <!-- placeholder -->
+- ![Subject erasure detail (state, KEK, erased_at, hold)](docs/screenshots/erasure-detail.png) <!-- placeholder -->
+- ![Erase subject (GDPR) confirmation modal](docs/screenshots/erase-modal.png) <!-- placeholder -->
+- ![Crypto-shredding stats widget](docs/screenshots/crypto-shredding-widget.png) <!-- placeholder -->
 
 ## Requirements
 
@@ -80,18 +84,21 @@ closure gates only the chain/entry/segment **verify** actions.
 
 `config/chronicle-filament.php`:
 
-| Key                                    | Default                      | Purpose                                                                                                                                                                                                                                                                           |
-|----------------------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `entry_model`                          | `\Chronicle\Entry\Entry`     | The Eloquent model the resource reads. Point at a subclass to add accessors/relations. With core >= 1.13 the override is honored end-to-end by core's reader and verifiers when `chronicle.models.entry` matches.                                                                 |
-| `navigation.group`                     | `'Chronicle'`                | Navigation group label.                                                                                                                                                                                                                                                           |
-| `navigation.sort`                      | `null`                       | Navigation sort order.                                                                                                                                                                                                                                                            |
-| `slug`                                 | `'chronicle-entries'`        | Resource route slug.                                                                                                                                                                                                                                                              |
-| `verification.enabled`                 | `true`                       | Master toggle for badges, verify actions, and the health widget.                                                                                                                                                                                                                  |
-| `verification.queue_threshold`         | `1000`                       | Chain/segment verifies covering more than this many entries are dispatched to the queue instead of running synchronously.                                                                                                                                                         |
-| `verification.store.connection`        | `null`                       | Database connection for the plugin-owned verification result store. `null` = the app's default connection.                                                                                                                                                                        |
-| `anchoring.enabled`                    | `null`                       | Master toggle for the anchor surfaces (detail section, Verify-anchor, anchor column/filter, coverage widget). `null` follows core's `chronicle.anchoring.enabled`; set `true`/`false` to force. Hidden everywhere when core anchoring is off.                                     |
-| `anchoring.verify_all_queue_threshold` | `1000`                       | The "Verify all anchors" action runs synchronously at or below this many in-scope checkpoints, and is dispatched to the queue above it.                                                                                                                                           |
-| `signing_keys.enabled`                 | `true`                       | Master toggle for the signing-key surfaces - the "Signing key" column + filter, the ViewEntry Active/Retired badge, and the key-ring widget. Display-only: signature verification stays inside core's chain/entry verifiers; this surface only shows which key signed each entry. |
+| Key                                    | Default                      | Purpose                                                                                                                                                                                                                                                                                             |
+|----------------------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `entry_model`                          | `\Chronicle\Entry\Entry`     | The Eloquent model the resource reads. Point at a subclass to add accessors/relations. With core >= 1.13 the override is honored end-to-end by core's reader and verifiers when `chronicle.models.entry` matches.                                                                                   |
+| `navigation.group`                     | `'Chronicle'`                | Navigation group label.                                                                                                                                                                                                                                                                             |
+| `navigation.sort`                      | `null`                       | Navigation sort order.                                                                                                                                                                                                                                                                              |
+| `slug`                                 | `'chronicle-entries'`        | Resource route slug.                                                                                                                                                                                                                                                                                |
+| `verification.enabled`                 | `true`                       | Master toggle for badges, verify actions, and the health widget.                                                                                                                                                                                                                                    |
+| `verification.queue_threshold`         | `1000`                       | Chain/segment verifies covering more than this many entries are dispatched to the queue instead of running synchronously.                                                                                                                                                                           |
+| `verification.store.connection`        | `null`                       | Database connection for the plugin-owned verification result store. `null` = the app's default connection.                                                                                                                                                                                          |
+| `anchoring.enabled`                    | `null`                       | Master toggle for the anchor surfaces (detail section, Verify-anchor, anchor column/filter, coverage widget). `null` follows core's `chronicle.anchoring.enabled`; set `true`/`false` to force. Hidden everywhere when core anchoring is off.                                                       |
+| `anchoring.verify_all_queue_threshold` | `1000`                       | The "Verify all anchors" action runs synchronously at or below this many in-scope checkpoints, and is dispatched to the queue above it.                                                                                                                                                             |
+| `signing_keys.enabled`                 | `true`                       | Master toggle for the signing-key surfaces - the "Signing key" column + filter, the ViewEntry Active/Retired badge, and the key-ring widget. Display-only: signature verification stays inside core's chain/entry verifiers; this surface only shows which key signed each entry.                   |
+| `crypto_shredding.enabled`             | `null`                       | Master toggle for the read-only crypto-shredding surfaces (erasure column/filter, ViewEntry erasure detail, `subject.erased` trail, the `CryptoShreddingWidget`). `null` follows core's `chronicle.encryption.enabled`; set `true`/`false` to force. Hidden everywhere when core encryption is off. |
+| `erasure.enabled`                      | `false`                      | Master toggle for the **Erase subject (GDPR)** action - the panel's only write. **Off by default**; the action is absent and non-routable unless this is `true`, independent of the visibility toggle.                                                                                              |
+| `erasure.allow_hold_override`          | `false`                      | Whether a legal hold may be overridden during an erase. **Off by default**; when off, an active `LegalHold` always blocks the erase. When on, the confirmation modal adds a distinct, required override checkbox.                                                                                   |
 
 The fluent plugin methods (`navigationGroup`, `navigationSort`, `slug`, `cluster`,
 `verification`, `anchoring`, `signingKeys`, `authorize`, `labelResolver`) override the matching config values per panel.
@@ -166,6 +173,69 @@ guide on key rotation.
 
 Enable the surfaces with `->signingKeys(true)` (or `signing_keys.enabled` in config); they
 are on by default.
+
+## Crypto-shredding & GDPR erasure
+
+When `laravel-chronicle/core` encrypts entry payloads per subject (crypto-shredding), the
+panel surfaces that state **read-only** - it reads key/hold *status* only and never unwraps a
+DEK, decrypts, or erases on a render path:
+
+- **Erasure column + filters** - an "Erasure" badge column (`Encrypted` / `Erased` /
+  `Not encrypted`) with an "On hold" indicator and a KEK / `erased_at` / hold tooltip, plus
+  filters by erasure state and by legal hold. Primed once per page in a flat two queries -
+  no per-row lookup, no DEK unwrap.
+- **ViewEntry erasure detail** - the subject's erasure state, wrapping `kek_id`, `erased_at`,
+  and active legal-hold status (reason + placed-at). For an erased subject it states plainly
+  that the personal data is permanently unreadable **while the entry stays intact and still
+  verifies**.
+- **`subject.erased` trail** - an "Erasure proofs only" table preset filtering to
+  `action = 'subject.erased'`, surfacing the requester and reason from the proof's metadata.
+- **Crypto-shredding widget** - a stats widget summarising encrypted subjects, erased
+  subjects, subjects on active legal hold, and the active KEK id, from cheap aggregates.
+
+Enable with `->cryptoShredding(true)` (or `crypto_shredding.enabled` in config); by default it
+follows core's `chronicle.encryption.enabled` and stays hidden when encryption is off (every
+subject reads `Not encrypted`).
+
+### Erasing a subject (GDPR Article 17)
+
+The panel has exactly **one** write: an opt-in, **off-by-default**, separately-authorized
+**Erase subject** action for fulfilling a GDPR Article 17 erasure request.
+
+**The reframed invariant - read this first.** Erasing a subject does **not** modify or delete
+any ledger entry. It calls core's `Chronicle::eraseSubject()`, which destroys the subject's
+data-encryption key (crypto-shredding) and **appends** a hash-chained, signed `subject.erased`
+proof. Existing entries - and their hashes and signatures - are never touched and still verify.
+The subject's personal data simply becomes permanently unreadable. The ledger stays immutable.
+
+The action ships **disabled**, and it is impossible to enable or trigger by accident:
+
+- **Off by default.** The action is absent and non-routable unless you turn erasure on with
+  `->erasure(true)` (or `erasure.enabled` in config). This is independent of the read-only
+  crypto-shredding visibility toggle.
+- **Separately authorized.** Even when enabled, the action stays hidden until you grant it
+  with `->eraseAuthorize(fn (Model $record) => /* your policy */)`. This gate **defaults to
+  deny** and is never the verify/read gate - unset, the action can never run.
+- **Confirmation + reason.** The modal requires typing the exact `subject_type:subject_id`
+  and a mandatory free-text reason. It is single-subject only - there is no bulk erase.
+- **Legal hold.** If the subject is under an active `LegalHold`, the erase is blocked. You can
+  permit an override only by turning on `->eraseAllowHoldOverride(true)` **and** accepting a
+  distinct override checkbox in the modal; the override is then recorded in the proof metadata.
+- **Idempotent.** Re-erasing an already-shredded subject is a friendly no-op, not an error.
+
+Register the gates on the plugin:
+
+```php
+use Illuminate\Database\Eloquent\Model;
+
+ChronicleFilamentPlugin::make()
+    ->erasure() // enable the action (off by default)
+    ->eraseAuthorize(fn (Model $record): bool => auth()->user()?->can('erase-subjects') ?? false)
+    ->eraseAllowHoldOverride(); // optional: permit a doubly-confirmed hold override
+```
+
+See core's crypto-shredding, GDPR-erasure, and legal-hold guides for the underlying mechanics:
+<!-- TODO: cross-link the exact core doc URLs (Crypto-Shredding / GDPR erasure / Legal hold). -->
 
 ## Theming
 

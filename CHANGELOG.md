@@ -5,7 +5,7 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.3.0]
+## [1.3.0] - 2026-07-01
 
 `laravel-chronicle/filament` v1.3 - crypto-shredding / GDPR erasure. Building on the
 read-only v1.2 panel, v1.3 surfaces core's crypto-shredding state (encryption / erasure /
@@ -27,6 +27,7 @@ entries, their hashes, and their signatures are never altered and still verify.
 - `ChronicleEntryResource` **Erase subject (GDPR Article 17)** action - the panel's only write, **off by default and authorized separately**. A single-subject row/detail action calling core's `Chronicle::eraseSubject()`, which destroys the subject's DEK and **appends** a `subject.erased` proof; no entry is ever updated or deleted. Guards: hidden unless `->erasure()` is on (default off) **and** `->eraseAuthorize()` grants it (deny by default; never the verify gate) **and** the entry has a subject - each re-checked in the action closure (defense in depth). A confirmation modal requires typing the exact `subject_type:subject_id` and a mandatory reason. An active `LegalHold` blocks the erase (override added separately). Re-erasing an already-shredded subject is a friendly no-op. Never a bulk action; never on a render path.
 - Erase action **legal-hold override**: when `->eraseAllowHoldOverride()` is on (default off) and the subject is on an active hold, the confirmation modal adds a distinct, required override checkbox; only when it is accepted does the erase proceed, passing `legalHoldOverride: true` so core records it in the `subject.erased` proof metadata. With override off, an active hold always blocks the erase.
 - Immutability guard + crypto-shredding sweep: `SubjectErasureImmutabilityTest` seeds encrypted, erased, and on-hold subjects via core in one ledger and proves the reframed invariant end-to-end - after a panel-driven erase, exactly one `subject.erased` proof is appended, every pre-existing entry is byte-for-byte unchanged (id/hash/sequence/action), core's `IntegrityVerifier` still passes, a held subject is still blocked and a re-erase is a no-op, and no mutating route or entry-mutating affordance exists. Re-asserts the read-only invariant after the panel's only write.
+- Docs: README "Crypto-shredding & GDPR erasure" read-only surfaces section, a clearly-marked "Erasing a subject (GDPR Article 17)" section leading with the off-by-default / separately-authorized posture and the reframed invariant (ledger immutable; erasure = key-store destroy + audited append; entries never change and still verify), config-reference rows for `crypto_shredding.enabled` / `erasure.enabled` / `erasure.allow_hold_override`, the fluent-toggle list, and screenshot placeholders. Cross-links core's crypto-shredding / GDPR / legal-hold docs.
 
 ---
 ## [1.2.0] - 2026-06-25
@@ -115,7 +116,8 @@ surfaced as status badges and a health widget. The panel can never rewrite histo
 - README rewritten for v1.0: positioning lead (read-only, cannot rewrite history, the only Filament audit plugin with chain/entry/segment cryptographic verification), install + panel-registration snippet, full config reference (`entry_model`, navigation, slug, `verification.enabled`/`queue_threshold`/`store.connection`), compatibility matrix (PHP 8.2/8.4/8.5, Filament 4 & 5, Laravel 12 & 13, core 1.13+, `ext-sodium`/`ext-openssl` required), and screenshot placeholders.
 - Hardened the v1.0 test sweep: rendered-badge coverage for every stored status, a read-vs-verify separation guard, a `ViewEntry` no-header-action guard, and a confirmed-green gate (full Pest suite + PHPStan level 10 + Pint) across the CI matrix.
 
-[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.2.0...HEAD
+[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.3.0...HEAD
+[1.3.0]: https://github.com/laravel-chronicle/filament/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/laravel-chronicle/filament/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/laravel-chronicle/filament/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/laravel-chronicle/filament/releases/tag/1.0.0
