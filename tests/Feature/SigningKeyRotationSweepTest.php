@@ -148,7 +148,9 @@ it('keeps the read-only invariant after the rotation surfaces', function () {
             ->toBeFalse("a mutating route '$page' was added - the read-only invariant is broken");
     }
 
-    // The detail page still exposes only the deliberate Verify-anchor header action.
+    // The detail page still exposes only deliberate, non-entry-mutating header
+    // actions: Verify-anchor and the off-by-default Erase-subject action (which
+    // appends a proof via core and never updates or deletes an entry).
     $instance = Livewire::test(ViewEntry::class, ['record' => $entry->getKey()])
         ->assertOk()
         ->instance();
@@ -157,7 +159,7 @@ it('keeps the read-only invariant after the rotation surfaces', function () {
         (new ReflectionMethod($instance, 'getHeaderActions'))->invoke($instance),
     );
 
-    expect($names)->toBe(['verifyAnchor'])
+    expect($names)->toBe(['verifyAnchor', 'eraseSubject'])
         ->not->toContain('edit')
         ->not->toContain('delete');
 });

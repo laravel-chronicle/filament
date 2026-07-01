@@ -42,6 +42,7 @@ class ViewEntry extends ViewRecord
         // records a verification result; it never mutates the entry or anchor.
         return [
             ChronicleEntryResource::verifyAnchorAction(),
+            ChronicleEntryResource::eraseSubjectAction(),
         ];
     }
 }
