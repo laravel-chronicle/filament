@@ -34,6 +34,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Clusters\Cluster;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -775,6 +776,16 @@ class ChronicleEntryResource extends Resource
                     ->label('Reason (required)')
                     ->required()
                     ->maxLength(1000),
+                // G8: a distinct, required confirmation - present ONLY when the
+                // subject is on hold AND overriding a hold is permitted.
+                Checkbox::make('legal_hold_override')
+                    ->label('I understand this subject is on legal hold and I am overriding it.')
+                    ->visible(fn (): bool => $record->subject_type !== null
+                        && $record->subject_id !== null
+                        && ChronicleFilamentPlugin::get()->isEraseHoldOverrideAllowed()
+                        && LegalHold::isHeld($record->subject_type, $record->subject_id))
+                    ->accepted()
+                    ->required(),
             ])
             ->action(function (Entry $record, array $data): void {
                 // G1 + G2 + G4 re-checked at execution time: defeat any crafted call.
@@ -789,16 +800,25 @@ class ChronicleEntryResource extends Resource
                 /** @var string $id */
                 $id = $record->subject_id;
 
-                // G7: a fresh hold read (not a render snapshot) blocks the erase.
-                // The override path is added in Task 2; for now a hold always blocks.
-                if (LegalHold::isHeld($type, $id)) {
-                    Notification::make()
-                        ->title('Subject is on legal hold')
-                        ->body('Erasure is blocked while an active legal hold exists.')
-                        ->danger()
-                        ->send();
+                // G7/G8: a fresh hold read (not a render snapshot). A hold blocks
+                // unless overriding is permitted AND the distinct override checkbox
+                // was accepted - only then is legalHoldOverride passed and recorded.
+                $held = LegalHold::isHeld($type, $id);
+                $override = false;
 
-                    return;
+                if ($held) {
+                    $override = ChronicleFilamentPlugin::get()->isEraseHoldOverrideAllowed()
+                        && ($data['legal_hold_override'] ?? false) === true;
+
+                    if (! $override) {
+                        Notification::make()
+                            ->title('Subject is on legal hold')
+                            ->body('Erasure is blocked while an active legal hold exists.')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
                 }
 
                 $reason = is_string($data['reason'] ?? null) ? trim((string) $data['reason']) : '';
@@ -809,6 +829,7 @@ class ChronicleEntryResource extends Resource
                     $id,
                     requester: static::eraseRequester(),
                     reason: $reason !== '' ? $reason : null,
+                    legalHoldOverride: $override,
                 );
 
                 // G9: already erased -> friendly no-op, not an error.

@@ -216,3 +216,63 @@ it('exposes the erase action on the detail-view header', function () {
     Livewire::test(ViewEntry::class, ['record' => $entry->getKey()])
         ->assertActionVisible('eraseSubject');
 });
+
+it('overrides a hold when allowed and the override is confirmed', function () {
+    $this->enableEncryption();
+    enableErase();
+    ChronicleFilamentPlugin::get()->eraseAllowHoldOverride(); // permit override
+    $this->seedLedger(count: 1);
+    app(SubjectKeyManager::class)->getOrCreate('stdClass', '1');
+    LegalHold::place('stdClass', '1', 'litigation hold', 'officer');
+
+    $entry = Entry::query()->where('subject_id', '1')->firstOrFail();
+
+    Livewire::test(ListEntries::class)
+        ->callAction(TestAction::make('eraseSubject')->table($entry), [
+            'confirm_subject' => $entry->subject_type.':'.$entry->subject_id,
+            'reason' => 'court-ordered erasure',
+            'legal_hold_override' => true,
+        ])
+        ->assertNotified('Subject erased');
+
+    // The proof records the override.
+    $proof = Entry::query()->where('action', 'subject.erased')->firstOrFail();
+    expect($proof->metadata['legal_hold_override'] ?? null)->toBeTrue();
+});
+
+it('refuses the override when the override checkbox is not accepted', function () {
+    $this->enableEncryption();
+    enableErase();
+    ChronicleFilamentPlugin::get()->eraseAllowHoldOverride();
+    $this->seedLedger(count: 1);
+    app(SubjectKeyManager::class)->getOrCreate('stdClass', '1');
+    LegalHold::place('stdClass', '1', 'litigation hold', 'officer');
+
+    $entry = Entry::query()->where('subject_id', '1')->firstOrFail();
+
+    Livewire::test(ListEntries::class)
+        ->callAction(TestAction::make('eraseSubject')->table($entry), [
+            'confirm_subject' => $entry->subject_type.':'.$entry->subject_id,
+            'reason' => 'court-ordered erasure',
+            'legal_hold_override' => false,
+        ])
+        ->assertHasFormErrors(['legal_hold_override']);
+
+    expect(Entry::query()->where('action', 'subject.erased')->count())->toBe(0);
+});
+
+it('still blocks a held subject when override is not allowed (regression)', function () {
+    $this->enableEncryption();
+    enableErase(); // eraseAllowHoldOverride stays OFF
+    $this->seedLedger(count: 1);
+    app(SubjectKeyManager::class)->getOrCreate('stdClass', '1');
+    LegalHold::place('stdClass', '1', 'litigation hold', 'officer');
+
+    $entry = Entry::query()->where('subject_id', '1')->firstOrFail();
+
+    Livewire::test(ListEntries::class)
+        ->callAction(TestAction::make('eraseSubject')->table($entry), eraseData($entry))
+        ->assertNotified('Subject is on legal hold');
+
+    expect(Entry::query()->where('action', 'subject.erased')->count())->toBe(0);
+});
