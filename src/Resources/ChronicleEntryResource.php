@@ -10,6 +10,7 @@ use Chronicle\Anchoring\CheckpointAnchor;
 use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\Encryption\SubjectKey;
 use Chronicle\Entry\Entry;
+use Chronicle\Facades\Chronicle;
 use Chronicle\Filament\ChronicleFilamentPlugin;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource\Pages\ListEntries;
@@ -28,11 +29,15 @@ use Chronicle\Verification\AnchorVerifier;
 use Chronicle\Verification\EntryVerifier;
 use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Clusters\Cluster;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -432,6 +437,7 @@ class ChronicleEntryResource extends Resource
                             )->send();
                     }),
                 static::verifyAnchorAction(),
+                static::eraseSubjectAction(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -729,6 +735,147 @@ class ChronicleEntryResource extends Resource
                     ? $notification->success()->send()
                     : $notification->danger()->body('Failure: '.VerificationFailure::AnchorInvalid->name)->send();
             });
+    }
+
+    /**
+     * The panel's ONLY write: the irreversible, off-by-default GDPR erase action.
+     * Calls core's Chronicle::eraseSubject(), which destroys the subject's DEK and
+     * APPENDS a subject.erased proof - it never updates or deletes an entry. Guards
+     * (see docs/.../v1.3-s3.md "Guard enforcement matrix"): off by default (G1) +
+     * separate deny-by-default authorize (G2), single-subject (G3), has-a-subject
+     * (G4), type-to-confirm (G5) + mandatory reason (G6), legal hold blocks (G7),
+     * idempotent (G9), no self-writes (G10). Each gate is enforced BOTH in
+     * ->visible() and re-checked in the closure (defense in depth).
+     */
+    public static function eraseSubjectAction(): Action
+    {
+        return Action::make('eraseSubject')
+            ->label('Erase subject (GDPR)')
+            ->icon('heroicon-o-fire')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Erase subject (GDPR Article 17)')
+            ->modalDescription('This permanently destroys the subject\'s encryption key. Existing entries are NOT changed - they stay in the ledger and still verify - but this subject\'s personal data becomes unreadable forever. This cannot be undone.')
+            ->modalSubmitActionLabel('Erase subject')
+            // G1 + G2 + G4: never mounts unless enabled, authorized, and the entry
+            // has a subject. (G3: this is a per-record action, never a bulk action.)
+            ->visible(fn (Entry $record): bool => static::canEraseSubject($record))
+            ->schema(fn (Entry $record): array => [
+                // G5: type-to-confirm the exact subject reference.
+                TextInput::make('confirm_subject')
+                    ->label('Type the subject to confirm')
+                    ->helperText('Enter exactly: '.$record->subject_type.':'.$record->subject_id)
+                    ->required()
+                    ->rule(static fn (): Closure => static function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                        if ($value !== $record->subject_type.':'.$record->subject_id) {
+                            $fail('The subject does not match. Type it exactly as shown.');
+                        }
+                    }),
+                // G6: a reason is mandatory.
+                Textarea::make('reason')
+                    ->label('Reason (required)')
+                    ->required()
+                    ->maxLength(1000),
+                // G8: a distinct, required confirmation - present ONLY when the
+                // subject is on hold AND overriding a hold is permitted.
+                Checkbox::make('legal_hold_override')
+                    ->label('I understand this subject is on legal hold and I am overriding it.')
+                    ->visible(fn (): bool => $record->subject_type !== null
+                        && $record->subject_id !== null
+                        && ChronicleFilamentPlugin::get()->isEraseHoldOverrideAllowed()
+                        && LegalHold::isHeld($record->subject_type, $record->subject_id))
+                    ->accepted()
+                    ->required(),
+            ])
+            ->action(function (Entry $record, array $data): void {
+                // G1 + G2 + G4 re-checked at execution time: defeat any crafted call.
+                if (! static::canEraseSubject($record)) {
+                    Notification::make()->title('Erase is not permitted')->danger()->send();
+
+                    return;
+                }
+
+                /** @var string $type */
+                $type = $record->subject_type;
+                /** @var string $id */
+                $id = $record->subject_id;
+
+                // G7/G8: a fresh hold read (not a render snapshot). A hold blocks
+                // unless overriding is permitted AND the distinct override checkbox
+                // was accepted - only then is legalHoldOverride passed and recorded.
+                $held = LegalHold::isHeld($type, $id);
+                $override = false;
+
+                if ($held) {
+                    $override = ChronicleFilamentPlugin::get()->isEraseHoldOverrideAllowed()
+                        && ($data['legal_hold_override'] ?? false) === true;
+
+                    if (! $override) {
+                        Notification::make()
+                            ->title('Subject is on legal hold')
+                            ->body('Erasure is blocked while an active legal hold exists.')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+                }
+
+                $reason = is_string($data['reason'] ?? null) ? trim((string) $data['reason']) : '';
+
+                // G10: the only write - core destroys the DEK and APPENDS the proof.
+                $erased = Chronicle::eraseSubject(
+                    $type,
+                    $id,
+                    requester: static::eraseRequester(),
+                    reason: $reason !== '' ? $reason : null,
+                    legalHoldOverride: $override,
+                );
+
+                // G9: already erased -> friendly no-op, not an error.
+                if (! $erased) {
+                    Notification::make()
+                        ->title('Subject already erased')
+                        ->body('No changes were made - this subject was already crypto-shredded.')
+                        ->info()
+                        ->send();
+
+                    return;
+                }
+
+                // Re-prime the store so the row/detail reflect the new tombstone.
+                app(SubjectErasureStore::class)->prime([$record]);
+
+                Notification::make()
+                    ->title('Subject erased')
+                    ->body('The subject\'s key was destroyed and a subject.erased proof was appended. The ledger is unchanged and still verifies.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /**
+     * The single erase gate: enabled (G1) AND authorized (G2) AND the entry has a
+     * subject (G4). Used by both ->visible() and the closure re-check. Never
+     * consults the verify/read gate.
+     */
+    protected static function canEraseSubject(Entry $record): bool
+    {
+        return ChronicleFilamentPlugin::get()->isErasureEnabled()
+            && ChronicleFilamentPlugin::get()->canErase($record)
+            && $record->subject_type !== null
+            && $record->subject_id !== null;
+    }
+
+    /**
+     * The authenticated user reference recorded as the erasure requester, or null
+     * when unauthenticated (core then records 'system').
+     */
+    protected static function eraseRequester(): ?string
+    {
+        $id = Auth::id();
+
+        return $id === null ? null : (string) $id;
     }
 
     /**

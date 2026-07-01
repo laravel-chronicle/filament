@@ -38,14 +38,17 @@ it('exposes only the read-only Verify-anchor header action on the view page', fu
         ->instance();
 
     // getHeaderActions() is protected; reach it via reflection. The detail page
-    // is strictly read-only: the only header action permitted is the deliberate
-    // Verify-anchor action (it reads and records a verification result, never
-    // mutating the entry or anchor). No mutating action may ever be added.
+    // exposes only deliberate, non-entry-mutating actions: the Verify-anchor
+    // action (reads/records a verification result) and the off-by-default
+    // Erase-subject action (the panel's only write - it destroys a subject DEK
+    // and APPENDS a proof via core, never updating or deleting an entry, and is
+    // hidden unless separately enabled and authorized). No entry-mutating action
+    // (edit/delete) may ever be added.
     $headerActions = (new ReflectionMethod($page, 'getHeaderActions'))->invoke($page);
     $names = array_map(fn (object $action): string => $action->getName(), $headerActions);
 
     expect($names)
-        ->toBe(['verifyAnchor'], 'an unexpected header action was added to ViewEntry - the read-only invariant is broken')
+        ->toBe(['verifyAnchor', 'eraseSubject'], 'an unexpected header action was added to ViewEntry - the read-only invariant is broken')
         ->not->toContain('edit')
         ->not->toContain('delete');
 });

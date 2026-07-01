@@ -46,6 +46,15 @@ it('is hidden when crypto-shredding is disabled', function () {
     expect(CryptoShreddingWidget::canView())->toBeFalse();
 });
 
+it('degrades the active KEK to a placeholder when the provider is unavailable', function () {
+    // Encryption is OFF (no KEK config), so provider() throws. activeKekId() must
+    // swallow it and return the '-' placeholder rather than erroring the widget.
+    $kek = (new ReflectionMethod(CryptoShreddingWidget::class, 'activeKekId'))
+        ->invoke(new CryptoShreddingWidget);
+
+    expect($kek)->toBe('-');
+});
+
 it('mounts on the list-page header beside the other widgets', function () {
     $this->seedLedger(count: 2);
 
