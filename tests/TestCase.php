@@ -111,7 +111,7 @@ abstract class TestCase extends Orchestra
     /**
      * @throws Throwable
      */
-    protected function seedLedger(int $count = 5, int $checkpointEvery = 0): SeededLedger
+    public function seedLedger(int $count = 5, int $checkpointEvery = 0): SeededLedger
     {
         return LedgerSeeder::make()
             ->count($count)
