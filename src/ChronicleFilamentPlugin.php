@@ -199,6 +199,13 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this;
     }
 
+    public function exportAuthorize(Closure $callback): ChronicleFilamentPlugin
+    {
+        $this->exportAuthorizeUsing = $callback;
+
+        return $this;
+    }
+
     public function authorize(Closure $callback): ChronicleFilamentPlugin
     {
         $this->authorizeUsing = $callback;
@@ -379,6 +386,21 @@ final class ChronicleFilamentPlugin implements Plugin
         }
 
         return (bool) ($this->authorizeUsing)($record);
+    }
+
+    /**
+     * Whether the current user may run the export / report actions. Because an
+     * export egresses the WHOLE dataset, this DEFAULTS TO THE VERIFY GATE
+     * (canVerify) and is never wider - someone who cannot verify can never
+     * export. An exportAuthorize() closure can only TIGHTEN it below verify.
+     */
+    public function canExport(?Model $record = null): bool
+    {
+        if ($this->exportAuthorizeUsing === null) {
+            return $this->canVerify($record);
+        }
+
+        return (bool) ($this->exportAuthorizeUsing)($record);
     }
 
     /**
