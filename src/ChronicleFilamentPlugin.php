@@ -18,7 +18,8 @@ use UnitEnum;
  * The Filament plugin for Chronicle: registers the read-only entry resource on a
  * panel and exposes a fluent API for host configuration - navigation placement,
  * slug, cluster, verification toggle, the authorize() gate for verify actions,
- * and a label resolver. Each setting falls back to config/chronicle-filament.php.
+ * a label resolver, and the v1.4 export/report toggles and canExport() gate.
+ * Each setting falls back to config/chronicle-filament.php.
  */
 final class ChronicleFilamentPlugin implements Plugin
 {
@@ -46,6 +47,12 @@ final class ChronicleFilamentPlugin implements Plugin
     protected ?bool $eraseAllowHoldOverride = null;
 
     protected ?Closure $eraseAuthorizeUsing = null;
+
+    protected ?bool $exports = null;
+
+    protected ?bool $reporting = null;
+
+    protected ?Closure $exportAuthorizeUsing = null;
 
     protected ?Closure $authorizeUsing = null;
 
@@ -178,6 +185,27 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this;
     }
 
+    public function exports(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->exports = $condition;
+
+        return $this;
+    }
+
+    public function reporting(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->reporting = $condition;
+
+        return $this;
+    }
+
+    public function exportAuthorize(Closure $callback): ChronicleFilamentPlugin
+    {
+        $this->exportAuthorizeUsing = $callback;
+
+        return $this;
+    }
+
     public function authorize(Closure $callback): ChronicleFilamentPlugin
     {
         $this->authorizeUsing = $callback;
@@ -304,6 +332,26 @@ final class ChronicleFilamentPlugin implements Plugin
     }
 
     /**
+     * Whether the verifiable-export surfaces (export + verify-export, wired in
+     * E2) are enabled. Fluent override wins; otherwise the plugin's
+     * exports.enabled config (default true). Read-only w.r.t. the ledger.
+     */
+    public function isExportsEnabled(): bool
+    {
+        return $this->exports ?? Config::boolean('chronicle-filament.exports.enabled', true);
+    }
+
+    /**
+     * Whether the signed compliance-report surface (wired in E3) is enabled.
+     * Fluent override wins; otherwise the plugin's reporting.enabled config
+     * (default true). Read-only w.r.t. the ledger.
+     */
+    public function isReportingEnabled(): bool
+    {
+        return $this->reporting ?? Config::boolean('chronicle-filament.reporting.enabled', true);
+    }
+
+    /**
      * Whether the current user may run the Erase-subject action. SEPARATE from
      * canVerify() and DENY BY DEFAULT: with no eraseAuthorize() closure set the
      * action can never run. Never the verify/read gate.
@@ -322,6 +370,39 @@ final class ChronicleFilamentPlugin implements Plugin
         return Config::integer('chronicle-filament.anchoring.verify_all_queue_threshold', 1000);
     }
 
+    /**
+     * The storage disk export/report artifacts are written to and read from.
+     * The plugin's exports.disk config wins when set to a non-empty string;
+     * otherwise it follows the application's default filesystem disk.
+     */
+    public function getExportsDisk(): string
+    {
+        $disk = Config::get('chronicle-filament.exports.disk');
+
+        if (is_string($disk) && $disk !== '') {
+            return $disk;
+        }
+
+        return Config::string('filesystems.default', 'local');
+    }
+
+    /**
+     * The directory prefix under the exports disk where bundles are written.
+     */
+    public function getExportsPath(): string
+    {
+        return Config::string('chronicle-filament.exports.path', 'chronicle-exports');
+    }
+
+    /**
+     * Compliance reports covering more than this many entries are queued rather
+     * than run synchronously. (Exports are always queued regardless.)
+     */
+    public function getExportsQueueThreshold(): int
+    {
+        return Config::integer('chronicle-filament.exports.queue_threshold', 1000);
+    }
+
     public function getLabelResolver(): ?Closure
     {
         return $this->labelResolver;
@@ -338,6 +419,21 @@ final class ChronicleFilamentPlugin implements Plugin
         }
 
         return (bool) ($this->authorizeUsing)($record);
+    }
+
+    /**
+     * Whether the current user may run the export / report actions. Because an
+     * export egresses the WHOLE dataset, this DEFAULTS TO THE VERIFY GATE
+     * (canVerify) and is never wider - someone who cannot verify can never
+     * export. An exportAuthorize() closure can only TIGHTEN it below verify.
+     */
+    public function canExport(?Model $record = null): bool
+    {
+        if ($this->exportAuthorizeUsing === null) {
+            return $this->canVerify($record);
+        }
+
+        return (bool) ($this->exportAuthorizeUsing)($record);
     }
 
     /**

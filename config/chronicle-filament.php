@@ -139,4 +139,47 @@ return [
         'allow_hold_override' => false,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Verifiable export (v1.4)
+    |--------------------------------------------------------------------------
+    |
+    | enabled          Master toggle for the export + verify-export surfaces
+    |                  (wired in E2). Default true.
+    | disk             The storage disk artifact bundles are written to and read
+    |                  from. null follows the application's default filesystem
+    |                  disk (config('filesystems.default')).
+    | path             The directory prefix under the disk for export bundles.
+    | queue_threshold  Compliance reports covering more than this many entries are
+    |                  dispatched to the queue instead of running synchronously.
+    |                  (Exports are ALWAYS queued regardless of this value.)
+    |
+    | An export egresses the WHOLE dataset, so the export/report actions are gated
+    | on ChronicleFilamentPlugin::canExport(), which DEFAULTS TO THE VERIFY GATE
+    | (canVerify) and is never wider.
+    |
+    */
+
+    'exports' => [
+        'enabled' => true,
+        'disk' => null,
+        'path' => 'chronicle-exports',
+        'queue_threshold' => 1000,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Compliance reporting (v1.4)
+    |--------------------------------------------------------------------------
+    |
+    | enabled  Master toggle for the signed compliance-report surface (wired in
+    |          E3). Default true. Reports are period-filtered and separately
+    |          signed by core; gated on canExport().
+    |
+    */
+
+    'reporting' => [
+        'enabled' => true,
+    ],
+
 ];
