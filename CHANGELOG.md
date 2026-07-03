@@ -5,6 +5,19 @@ All notable changes to `laravel-chronicle/filament` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+`laravel-chronicle/filament` v1.4 - export & reporting. Surfaces core's verifiable export
+(a signed `entries.ndjson` + `manifest.json` + `signature.json` bundle), an
+export-verification action, and signed compliance reports over a period - all **read-only**
+w.r.t. the ledger; the only things written are artifact files on a storage disk.
+
+### Added
+
+- Confirmed core 1.13's export / reporting / verify surface - `Chronicle\Exports\ExportManager::export()` (writes a signed `entries.ndjson`/`manifest.json`/`signature.json` bundle, full-dataset, appends nothing to the ledger), `Chronicle\Verification\ExportVerifier::verify()` -> `ExportVerificationResult` (`isValid`/`failureCode`/`entryCount`/`datasetHash`/`chainHead`), and `Chronicle\Reports\ComplianceReport::generate()` -> `ComplianceReportResult` - recorded in `docs/chronicle-filament-v1.4-E1-core-confirmation.md`.
+
+---
+
 ## [1.3.0] - 2026-07-01
 
 `laravel-chronicle/filament` v1.3 - crypto-shredding / GDPR erasure. Building on the
