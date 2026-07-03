@@ -370,6 +370,39 @@ final class ChronicleFilamentPlugin implements Plugin
         return Config::integer('chronicle-filament.anchoring.verify_all_queue_threshold', 1000);
     }
 
+    /**
+     * The storage disk export/report artifacts are written to and read from.
+     * The plugin's exports.disk config wins when set to a non-empty string;
+     * otherwise it follows the application's default filesystem disk.
+     */
+    public function getExportsDisk(): string
+    {
+        $disk = Config::get('chronicle-filament.exports.disk');
+
+        if (is_string($disk) && $disk !== '') {
+            return $disk;
+        }
+
+        return Config::string('filesystems.default', 'local');
+    }
+
+    /**
+     * The directory prefix under the exports disk where bundles are written.
+     */
+    public function getExportsPath(): string
+    {
+        return Config::string('chronicle-filament.exports.path', 'chronicle-exports');
+    }
+
+    /**
+     * Compliance reports covering more than this many entries are queued rather
+     * than run synchronously. (Exports are always queued regardless.)
+     */
+    public function getExportsQueueThreshold(): int
+    {
+        return Config::integer('chronicle-filament.exports.queue_threshold', 1000);
+    }
+
     public function getLabelResolver(): ?Closure
     {
         return $this->labelResolver;
