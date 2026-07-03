@@ -18,7 +18,8 @@ use UnitEnum;
  * The Filament plugin for Chronicle: registers the read-only entry resource on a
  * panel and exposes a fluent API for host configuration - navigation placement,
  * slug, cluster, verification toggle, the authorize() gate for verify actions,
- * and a label resolver. Each setting falls back to config/chronicle-filament.php.
+ * a label resolver, and the v1.4 export/report toggles and canExport() gate.
+ * Each setting falls back to config/chronicle-filament.php.
  */
 final class ChronicleFilamentPlugin implements Plugin
 {
@@ -46,6 +47,12 @@ final class ChronicleFilamentPlugin implements Plugin
     protected ?bool $eraseAllowHoldOverride = null;
 
     protected ?Closure $eraseAuthorizeUsing = null;
+
+    protected ?bool $exports = null;
+
+    protected ?bool $reporting = null;
+
+    protected ?Closure $exportAuthorizeUsing = null;
 
     protected ?Closure $authorizeUsing = null;
 
@@ -178,6 +185,20 @@ final class ChronicleFilamentPlugin implements Plugin
         return $this;
     }
 
+    public function exports(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->exports = $condition;
+
+        return $this;
+    }
+
+    public function reporting(bool $condition = true): ChronicleFilamentPlugin
+    {
+        $this->reporting = $condition;
+
+        return $this;
+    }
+
     public function authorize(Closure $callback): ChronicleFilamentPlugin
     {
         $this->authorizeUsing = $callback;
@@ -301,6 +322,26 @@ final class ChronicleFilamentPlugin implements Plugin
     public function isEraseHoldOverrideAllowed(): bool
     {
         return $this->eraseAllowHoldOverride ?? Config::boolean('chronicle-filament.erasure.allow_hold_override', false);
+    }
+
+    /**
+     * Whether the verifiable-export surfaces (export + verify-export, wired in
+     * E2) are enabled. Fluent override wins; otherwise the plugin's
+     * exports.enabled config (default true). Read-only w.r.t. the ledger.
+     */
+    public function isExportsEnabled(): bool
+    {
+        return $this->exports ?? Config::boolean('chronicle-filament.exports.enabled', true);
+    }
+
+    /**
+     * Whether the signed compliance-report surface (wired in E3) is enabled.
+     * Fluent override wins; otherwise the plugin's reporting.enabled config
+     * (default true). Read-only w.r.t. the ledger.
+     */
+    public function isReportingEnabled(): bool
+    {
+        return $this->reporting ?? Config::boolean('chronicle-filament.reporting.enabled', true);
     }
 
     /**

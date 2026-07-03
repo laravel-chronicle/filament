@@ -15,6 +15,7 @@ w.r.t. the ledger; the only things written are artifact files on a storage disk.
 ### Added
 
 - Confirmed core 1.13's export / reporting / verify surface - `Chronicle\Exports\ExportManager::export()` (writes a signed `entries.ndjson`/`manifest.json`/`signature.json` bundle, full-dataset, appends nothing to the ledger), `Chronicle\Verification\ExportVerifier::verify()` -> `ExportVerificationResult` (`isValid`/`failureCode`/`entryCount`/`datasetHash`/`chainHead`), and `Chronicle\Reports\ComplianceReport::generate()` -> `ComplianceReportResult` - recorded in `docs/chronicle-filament-v1.4-E1-core-confirmation.md`.
+- `exports.*` / `reporting.*` config + enablement gates. New `exports.enabled` (default `true`), `exports.disk` (null follows the app's default filesystem disk), `exports.path` (`chronicle-exports`), `exports.queue_threshold` (`1000`), and `reporting.enabled` (default `true`) config blocks. New `ChronicleFilamentPlugin` fluent toggles + getters: `->exports()`/`isExportsEnabled()` and `->reporting()`/`isReportingEnabled()` (fluent override -> config, default true). No export/report surfaces wired yet.
 
 ---
 
