@@ -61,14 +61,22 @@ it('exposes only read-only header actions on the list page', function () {
         ->assertOk()
         ->instance();
 
-    // The list page is strictly read-only: the only header actions permitted are
-    // the deliberate verify actions (they read/record/notify, never mutating an
-    // entry or anchor). No mutating action may ever be added.
+    // The list page is strictly read-only w.r.t. the ledger: the only header
+    // actions permitted are the deliberate verify actions (they read/record/notify)
+    // and the queued export action (it reads the full dataset and writes only
+    // artifact files to the exports disk, appending nothing to the ledger). No
+    // entry- or anchor-mutating action may ever be added.
     $headerActions = (new ReflectionMethod($page, 'getHeaderActions'))->invoke($page);
     $names = array_map(fn (object $action): string => $action->getName(), $headerActions);
 
     expect($names)
-        ->toBe(['verifyChain', 'verifyAllAnchors'], 'an unexpected header action was added to ListEntries - the read-only invariant is broken')
+        ->toBe([
+            'exportLedger',
+            'verifyExport',
+            'downloadLatestExport',
+            'verifyChain',
+            'verifyAllAnchors',
+        ], 'an unexpected header action was added to ListEntries - the read-only invariant is broken')
         ->not->toContain('edit')
         ->not->toContain('delete');
 });
