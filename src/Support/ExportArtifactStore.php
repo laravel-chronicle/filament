@@ -23,7 +23,7 @@ use ZipArchive;
  */
 final class ExportArtifactStore
 {
-    protected const array FILES = [
+    protected const FILES = [
         ExportFormat::ENTRIES,
         ExportFormat::MANIFEST,
         ExportFormat::SIGNATURE,
