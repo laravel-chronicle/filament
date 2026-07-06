@@ -33,7 +33,7 @@ return new class extends Migration
         $this->schema()->dropIfExists('chronicle_filament_verification_records');
     }
 
-    private function schema(): Builder
+    protected function schema(): Builder
     {
         $connection = Config::get('chronicle-filament.verification.store.connection');
 
