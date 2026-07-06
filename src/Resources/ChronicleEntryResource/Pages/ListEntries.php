@@ -7,6 +7,7 @@ namespace Chronicle\Filament\Resources\ChronicleEntryResource\Pages;
 use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\Entry\Entry;
 use Chronicle\Filament\ChronicleFilamentPlugin;
+use Chronicle\Filament\Jobs\ExportLedgerJob;
 use Chronicle\Filament\Jobs\VerifyAnchorsJob;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
@@ -87,6 +88,25 @@ class ListEntries extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('exportLedger')
+                ->label('Export ledger')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->requiresConfirmation()
+                ->modalHeading('Export the full ledger')
+                ->modalDescription('This exports the entire dataset as a signed, verifiable bundle (plaintext for unencrypted columns, ciphertext for encrypted fields). Only export to least-privilege storage. The export runs in the background - you will be notified when the signed bundle is ready.')
+                ->modalSubmitActionLabel('Queue export')
+                ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isExportsEnabled()
+                    && ChronicleFilamentPlugin::get()->canExport())
+                ->action(function (): void {
+                    // Exports are ALWAYS queued - never run in the request.
+                    ExportLedgerJob::dispatch(Auth::id());
+
+                    Notification::make()
+                        ->title('Export queued')
+                        ->body("The full-dataset export is running in the background; you'll be notified when the signed bundle is ready.")
+                        ->info()
+                        ->send();
+                }),
             Action::make('verifyChain')
                 ->label('Verify chain')
                 ->icon('heroicon-o-link')
