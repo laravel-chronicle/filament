@@ -50,6 +50,22 @@ it('stores a signed bundle that re-verifies clean under core ExportVerifier', fu
     expect(is_dir($extracted))->toBeFalse();
 });
 
+it('rejects bytes that are not a readable zip archive', function () {
+    $store = app(ExportArtifactStore::class);
+
+    expect(fn () => $store->extractToLocalDir('these bytes are not a zip archive'))
+        ->toThrow(RuntimeException::class, 'not a readable zip archive');
+});
+
+it('treats deleting an absent local dir as a no-op', function () {
+    $store = app(ExportArtifactStore::class);
+    $absent = sys_get_temp_dir().'/chronicle-absent-'.Str::uuid();
+
+    $store->deleteLocalDir($absent);
+
+    expect(is_dir($absent))->toBeFalse();
+});
+
 it('lists prior bundles newest-first and exposes the latest', function () {
     $this->seedLedger(count: 2);
     $store = app(ExportArtifactStore::class);

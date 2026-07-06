@@ -50,6 +50,33 @@ it('reports a tampered bundle as invalid with a reason', function () {
         ->assertNotified('Export verification failed');
 });
 
+it('verifies an uploaded zip bundle read from the local disk', function () {
+    $this->seedLedger(count: 3, checkpointEvery: 2);
+    $bundle = storeBundle();
+
+    // Simulate a Filament FileUpload: the zip bytes live on the local disk and
+    // the action receives the stored path in $data['upload'].
+    $uploadPath = 'chronicle-verify-uploads/'.$bundle->name;
+    Storage::disk('local')->put(
+        $uploadPath,
+        (string) app(ExportArtifactStore::class)->disk()->get($bundle->path),
+    );
+
+    // A single FileUpload keeps its state as [fileKey => path] and dehydrates to
+    // the first path, so hand the action that internal shape.
+    Livewire::test(ListEntries::class)
+        ->callAction('verifyExport', data: ['upload' => [Str::uuid()->toString() => $uploadPath]])
+        ->assertNotified('Export verified');
+});
+
+it('warns when neither a bundle nor an upload was provided', function () {
+    $this->seedLedger(count: 2);
+
+    Livewire::test(ListEntries::class)
+        ->callAction('verifyExport', data: [])
+        ->assertNotified('Choose a bundle to verify');
+});
+
 it('hides the verify-export action when exports are disabled', function () {
     $this->seedLedger(count: 2);
     ChronicleFilamentPlugin::get()->exports(false);

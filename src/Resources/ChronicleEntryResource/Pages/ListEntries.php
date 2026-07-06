@@ -173,6 +173,30 @@ class ListEntries extends ListRecords
                         ->danger()
                         ->send();
                 }),
+            Action::make('downloadLatestExport')
+                ->label('Download latest export')
+                ->icon('heroicon-o-arrow-down-on-square')
+                ->color('gray')
+                ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isExportsEnabled()
+                    && ChronicleFilamentPlugin::get()->canExport()
+                    && app(ExportArtifactStore::class)->latest() !== null)
+                ->action(function () {
+                    $store = app(ExportArtifactStore::class);
+                    $latest = $store->latest();
+
+                    if ($latest === null) {
+                        // TOCTOU guard: visible() already requires latest() !== null, so this
+                        // only fires if a bundle is deleted between render and click.
+                        // @codeCoverageIgnoreStart
+                        Notification::make()->title('No export bundles yet')->info()->send();
+
+                        return null;
+                        // @codeCoverageIgnoreEnd
+                    }
+
+                    // Egresses the full dataset - already gated on canExport().
+                    return $store->disk()->download($latest->path, $latest->name);
+                }),
             Action::make('verifyChain')
                 ->label('Verify chain')
                 ->icon('heroicon-o-link')

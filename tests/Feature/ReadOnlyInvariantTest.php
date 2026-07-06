@@ -70,7 +70,13 @@ it('exposes only read-only header actions on the list page', function () {
     $names = array_map(fn (object $action): string => $action->getName(), $headerActions);
 
     expect($names)
-        ->toBe(['exportLedger', 'verifyExport', 'verifyChain', 'verifyAllAnchors'], 'an unexpected header action was added to ListEntries - the read-only invariant is broken')
+        ->toBe([
+            'exportLedger',
+            'verifyExport',
+            'downloadLatestExport',
+            'verifyChain',
+            'verifyAllAnchors',
+        ], 'an unexpected header action was added to ListEntries - the read-only invariant is broken')
         ->not->toContain('edit')
         ->not->toContain('delete');
 });

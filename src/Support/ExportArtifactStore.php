@@ -41,13 +41,19 @@ final class ExportArtifactStore
         $tmpZip = tempnam(sys_get_temp_dir(), 'chronicle-zip-');
 
         if ($tmpZip === false) {
+            // OS-level tempnam() failure; not reproducible in tests.
+            // @codeCoverageIgnoreStart
             throw new RuntimeException('Unable to allocate a temporary file for the export bundle.');
+            // @codeCoverageIgnoreEnd
         }
 
         $zip = new ZipArchive;
 
         if ($zip->open($tmpZip, ZipArchive::OVERWRITE) !== true) {
+            // ZipArchive::open() failure on a freshly allocated temp file; not reproducible in tests.
+            // @codeCoverageIgnoreStart
             throw new RuntimeException('Unable to open the export bundle for writing.');
+            // @codeCoverageIgnoreEnd
         }
 
         foreach (self::FILES as $file) {
@@ -96,7 +102,10 @@ final class ExportArtifactStore
         $dir = sys_get_temp_dir().'/chronicle-verify-'.Str::uuid();
 
         if (! mkdir($dir, 0700, true) && ! is_dir($dir)) {
+            // OS-level mkdir() failure under a random temp path; not reproducible in tests.
+            // @codeCoverageIgnoreStart
             throw new RuntimeException('Unable to create a temporary directory for verification.');
+            // @codeCoverageIgnoreEnd
         }
 
         $tmpZip = $dir.'/bundle.zip';
