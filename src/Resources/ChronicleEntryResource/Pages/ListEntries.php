@@ -11,6 +11,7 @@ use Chronicle\Filament\Jobs\ExportLedgerJob;
 use Chronicle\Filament\Jobs\VerifyAnchorsJob;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
+use Chronicle\Filament\Support\ExportArtifactStore;
 use Chronicle\Filament\Support\SubjectErasureStore;
 use Chronicle\Filament\Support\VerificationResultStore;
 use Chronicle\Filament\Widgets\AnchorCoverageWidget;
@@ -18,9 +19,12 @@ use Chronicle\Filament\Widgets\CryptoShreddingWidget;
 use Chronicle\Filament\Widgets\SigningKeyRingWidget;
 use Chronicle\Filament\Widgets\VerificationHealthWidget;
 use Chronicle\Verification\AnchorVerifier;
+use Chronicle\Verification\ExportVerifier;
 use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Widgets\Widget;
@@ -30,6 +34,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * The entry browse page. Primes the verification result store once per render so
@@ -107,6 +112,67 @@ class ListEntries extends ListRecords
                         ->info()
                         ->send();
                 }),
+            Action::make('verifyExport')
+                ->label('Verify export')
+                ->icon('heroicon-o-shield-check')
+                ->modalHeading('Verify an export bundle')
+                ->modalDescription('Re-verify a signed bundle against this ledger\'s key ring. Pick a prior bundle from the exports disk, or upload a zip.')
+                ->modalSubmitActionLabel('Verify')
+                ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isExportsEnabled()
+                    && ChronicleFilamentPlugin::get()->canExport())
+                ->schema([
+                    Select::make('bundle')
+                        ->label('Prior bundle on the exports disk')
+                        ->options(fn (): array => app(ExportArtifactStore::class)
+                            ->all()
+                            ->mapWithKeys(fn ($artifact): array => [$artifact->path => $artifact->name])
+                            ->all())
+                        ->searchable(),
+                    FileUpload::make('upload')
+                        ->label('...or upload a zip bundle')
+                        ->acceptedFileTypes(['application/zip', 'application/x-zip-compressed'])
+                        ->disk('local')
+                        ->directory('chronicle-verify-uploads'),
+                ])
+                ->action(function (array $data): void {
+                    $store = app(ExportArtifactStore::class);
+
+                    $contents = $this->resolveBundleContents($store, $data);
+
+                    if ($contents === null) {
+                        Notification::make()
+                            ->title('Choose a bundle to verify')
+                            ->body('Pick a prior bundle or upload a zip.')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    $dir = $store->extractToLocalDir($contents);
+
+                    try {
+                        $result = app(ExportVerifier::class)->verify($dir);
+                    } finally {
+                        $store->deleteLocalDir($dir);
+                    }
+
+                    if ($result->isValid()) {
+                        Notification::make()
+                            ->title('Export verified')
+                            ->body("{$result->entryCount()} entries; dataset hash ".substr((string) $result->datasetHash(), 0, 12).'.')
+                            ->success()
+                            ->send();
+
+                        return;
+                    }
+
+                    Notification::make()
+                        ->title('Export verification failed')
+                        ->body('Reason: '.($result->failureCode() ?? 'unknown'))
+                        ->danger()
+                        ->send();
+                }),
             Action::make('verifyChain')
                 ->label('Verify chain')
                 ->icon('heroicon-o-link')
@@ -182,6 +248,33 @@ class ListEntries extends ListRecords
                         : $notification->danger()->body('Failure: '.VerificationFailure::AnchorInvalid->name)->send();
                 }),
         ];
+    }
+
+    /**
+     * Read the raw zip bytes for the verify-export action: prefer an uploaded
+     * file, else the selected prior bundle on the exports' disk. Returns null when
+     * neither was provided.
+     *
+     * Accepts the raw Filament action-data array (key type is whatever the form
+     * state carries); only the string `upload`/`bundle` keys are read.
+     *
+     * @param  array<array-key, mixed>  $data
+     */
+    protected function resolveBundleContents(ExportArtifactStore $store, array $data): ?string
+    {
+        $upload = $data['upload'] ?? null;
+
+        if (is_string($upload) && $upload !== '') {
+            return (string) Storage::disk('local')->get($upload);
+        }
+
+        $bundle = $data['bundle'] ?? null;
+
+        if (is_string($bundle) && $bundle !== '') {
+            return (string) $store->disk()->get($bundle);
+        }
+
+        return null;
     }
 
     /**
