@@ -74,6 +74,8 @@ it('exposes only read-only header actions on the list page', function () {
             'exportLedger',
             'verifyExport',
             'downloadLatestExport',
+            'complianceReport',
+            'downloadLatestReport',
             'verifyChain',
             'verifyAllAnchors',
         ], 'an unexpected header action was added to ListEntries - the read-only invariant is broken')

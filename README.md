@@ -99,9 +99,21 @@ closure gates only the chain/entry/segment **verify** actions.
 | `crypto_shredding.enabled`             | `null`                       | Master toggle for the read-only crypto-shredding surfaces (erasure column/filter, ViewEntry erasure detail, `subject.erased` trail, the `CryptoShreddingWidget`). `null` follows core's `chronicle.encryption.enabled`; set `true`/`false` to force. Hidden everywhere when core encryption is off. |
 | `erasure.enabled`                      | `false`                      | Master toggle for the **Erase subject (GDPR)** action - the panel's only write. **Off by default**; the action is absent and non-routable unless this is `true`, independent of the visibility toggle.                                                                                              |
 | `erasure.allow_hold_override`          | `false`                      | Whether a legal hold may be overridden during an erase. **Off by default**; when off, an active `LegalHold` always blocks the erase. When on, the confirmation modal adds a distinct, required override checkbox.                                                                                   |
+| `exports.enabled`                      | `true`                       | Master toggle for the verifiable-export surface (Export ledger, Verify export, Download latest export).                                                                                                                                                                                             |
+| `exports.disk`                         | `null`                       | Storage disk for export **and** compliance-report artifacts. `null` follows the app's default filesystem disk (`filesystems.default`).                                                                                                                                                              |
+| `exports.path`                         | `'chronicle-exports'`        | Directory prefix for export bundles on the exports disk. Compliance reports live under a separate `chronicle-reports/` prefix on the same disk, so the two never mix.                                                                                                                               |
+| `exports.queue_threshold`              | `1000`                       | Compliance reports covering more than this many entries are queued instead of running synchronously. Exports are **always** queued regardless.                                                                                                                                                      |
+| `reporting.enabled`                    | `true`                       | Master toggle for the signed compliance-report surface (Compliance report, Download latest report). Reports are period-filtered and separately signed by core; gated on `canExport()`.                                                                                                              |
 
 The fluent plugin methods (`navigationGroup`, `navigationSort`, `slug`, `cluster`,
 `verification`, `anchoring`, `signingKeys`, `authorize`, `labelResolver`) override the matching config values per panel.
+
+The v1.4 export/reporting surface adds three more fluent gates: `->exports(bool)` /
+`isExportsEnabled()` and `->reporting(bool)` / `isReportingEnabled()` toggle the export and
+report surfaces, and `->exportAuthorize(Closure)` / `canExport(?Model)` gates them. Because an
+export egresses the whole dataset, `canExport()` **defaults to the verify gate**
+(`canVerify()`) and can only be **tightened** below it - a non-verifier can never export or
+report.
 
 ## Verification
 
@@ -236,6 +248,55 @@ ChronicleFilamentPlugin::make()
 
 See core's crypto-shredding, GDPR-erasure, and legal-hold guides for the underlying mechanics:
 <!-- TODO: cross-link the exact core doc URLs (Crypto-Shredding / GDPR erasure / Legal hold). -->
+
+## Verifiable export & compliance reports
+
+Chronicle for Filament surfaces core's **verifiable export** and **signed compliance
+reports** as read-only operator actions on the entry list page. Both are **reads** - the
+only things written are artifact files on a storage disk; the ledger is never touched, and
+core signs every artifact so it re-verifies.
+
+### Verifiable export
+
+The **Export ledger** header action queues a job that runs core's `ExportManager::export()`,
+packages the signed `entries.ndjson` / `manifest.json` / `signature.json` bundle into one
+downloadable zip on the exports disk, and notifies you with the entry count and dataset
+hash. **Verify export** re-checks any bundle (a prior one on the disk, or an uploaded zip)
+under core's `ExportVerifier`, and **Download latest export** streams the newest bundle.
+
+> **⚠ Data-egress note.** An export egresses the **whole dataset** - plaintext for
+> unencrypted columns, ciphertext for encrypted fields. Treat an export bundle as sensitive:
+> write it only to least-privilege storage. Because of this, exports **and** reports are
+> gated on `canExport()`, which **defaults to the verify gate** (`canVerify()`) and is never
+> wider - someone who cannot verify can never export. Tighten it further with
+> `->exportAuthorize()`.
+
+### Compliance reports
+
+The **Compliance report** header action takes an optional `from`/`to` period (blank covers
+the whole ledger) and calls core's `ComplianceReport::generate()`, which summarises ledger
+integrity and coverage and signs the report via the key ring. Small reports render inline
+immediately and are stored for later download; reports covering more than
+`exports.queue_threshold` entries run in the background and notify you when ready.
+**Download latest report** streams the newest signed report bundle (`report.html` +
+`signature.json`, re-verifiable under core). An empty period is handled with a friendly
+notice and stores nothing.
+
+Reports are gated on `->reporting()` **and** `canExport()`, and are read-only: the ledger is
+never appended to or mutated; only artifact files are written, and core signs them so they
+re-verify. Report bundles live under a separate `chronicle-reports/` prefix on the exports
+disk, so they never mix with export bundles.
+
+Enable the surfaces with `->exports(true)` / `->reporting(true)` (or `exports.enabled` /
+`reporting.enabled` in config); both are on by default. See core's export,
+compliance-report, and export-verification docs for the underlying guarantees. The same
+operations are available on the CLI: `chronicle:export`, `chronicle:report`, and
+`chronicle:verify-export`.
+<!-- TODO: cross-link the exact core doc URLs (Export / Compliance report / Verify export). -->
+
+<!-- Screenshot: Export ledger + Verify export header actions -->
+<!-- Screenshot: Compliance report modal with from/to period -->
+<!-- Screenshot: Rendered signed compliance report HTML -->
 
 ## Theming
 

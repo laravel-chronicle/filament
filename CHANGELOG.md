@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [1.4.0] - 2026-07-07
+
 `laravel-chronicle/filament` v1.4 - export & reporting. Surfaces core's verifiable export
 (a signed `entries.ndjson` + `manifest.json` + `signature.json` bundle), an
 export-verification action, and signed compliance reports over a period - all **read-only**
@@ -22,6 +26,11 @@ w.r.t. the ledger; the only things written are artifact files on a storage disk.
 - Verifiable **Export ledger** action (always queued). A list-page header action dispatches `Chronicle\Filament\Jobs\ExportLedgerJob`, which runs core's `ExportManager::export()`, zips the signed bundle onto `exports.disk`, and notifies the initiating user with the entry count and dataset hash. Gated on `->exports()` + `canExport()`; the confirmation states the full-dataset egress. Read-only - writes only artifact files, appends nothing to the ledger.
 - **Verify export** action. A list-page header action that re-verifies a signed bundle - picked from `exports.disk` or uploaded as a zip - by unpacking it to a temp directory and running core's `ExportVerifier::verify()`, then reporting validity plus the decoded failure code and entry count / dataset hash / chain head. Temp files are cleaned up. Gated on `->exports()` + `canExport()`.
 - Last-export widget + **Download latest export** action. A `StatsOverviewWidget` summarises the export bundles on `exports.disk` (count, latest bundle name / size / generated-at) reading disk metadata only; a header action streams the newest bundle for download. The widget is gated on `->exports()`; the download additionally on `canExport()` (it egresses the dataset). Hidden when exports are disabled.
+- Compliance-report disk helper. New `Chronicle\Filament\Support\ComplianceReportStore` zips a signed report's `report.html` and a machine-verifiable `signature.json` (`reportHash`/`signature`/`algorithm`/`keyId`, re-checkable via core's `ComplianceReport::verify()`) into a uniquely named `.zip` on `exports.disk` under its own `chronicle-reports/` prefix - kept separate from export bundles so the export listing never mixes the two - and lists prior reports (newest first); new `ComplianceReportArtifact` value object (`name`/`path`/`sizeBytes`/`lastModified`). Read-only w.r.t. the ledger - writes only artifact files.
+- Queued **compliance-report** job. New `Chronicle\Filament\Jobs\ComplianceReportJob` runs core's `ComplianceReport::generate($path, $from, $to)` for a period, stores the signed report bundle on `exports.disk` via `ComplianceReportStore`, and notifies the initiating user with the entry count and covered period. Dispatched only above `exports.queue_threshold`. Read-only - writes only artifact files, appends nothing to the ledger.
+- Signed **compliance report** action + **Download latest report** action. A list-page header action collects an optional `from`/`to` period and calls core's `ComplianceReport::generate()`: below `exports.queue_threshold` it generates synchronously, stores the signed bundle on `exports.disk`, and renders the report HTML inline; above the threshold it dispatches `ComplianceReportJob` and notifies. An empty period is handled with a friendly notice and stores nothing. A second header action downloads the newest stored report bundle. Both gated on `->reporting()` + `canExport()`; hidden when reporting is disabled or the user cannot export. Read-only - writes only artifact files, appends nothing to the ledger.
+- Export + report **read-only guard** sweep. `ExportReportReadOnlyGuardTest` seeds a checkpointed ledger on a fake disk and proves the read-only invariant end-to-end: after running the full-dataset export and a compliance report back to back, the entry count and chain head are unchanged, core's `IntegrityVerifier` still passes, and no mutating resource route exists. Complements the per-surface report/export/verify tests.
+- Docs: README "Verifiable export & compliance reports" section (verifiable export, verify-export, signed compliance reports), the `exports.*` / `reporting.*` config rows and `->exports()` / `->reporting()` / `->exportAuthorize()` fluent gates, a prominent **data-egress note** (an export is the whole dataset - gate to the least privilege; defaults to the verify gate) and the read-only framing (artifact files only, never the ledger; core signs them and they re-verify), cross-links to core's export / report / verify-export docs and the `chronicle:export` / `chronicle:report` / `chronicle:verify-export` commands, and screenshot placeholders.
 
 ---
 
@@ -136,7 +145,8 @@ surfaced as status badges and a health widget. The panel can never rewrite histo
 - README rewritten for v1.0: positioning lead (read-only, cannot rewrite history, the only Filament audit plugin with chain/entry/segment cryptographic verification), install + panel-registration snippet, full config reference (`entry_model`, navigation, slug, `verification.enabled`/`queue_threshold`/`store.connection`), compatibility matrix (PHP 8.2/8.4/8.5, Filament 4 & 5, Laravel 12 & 13, core 1.13+, `ext-sodium`/`ext-openssl` required), and screenshot placeholders.
 - Hardened the v1.0 test sweep: rendered-badge coverage for every stored status, a read-vs-verify separation guard, a `ViewEntry` no-header-action guard, and a confirmed-green gate (full Pest suite + PHPStan level 10 + Pint) across the CI matrix.
 
-[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.3.0...HEAD
+[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.4.0...HEAD
+[1.4.0]: https://github.com/laravel-chronicle/filament/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/laravel-chronicle/filament/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/laravel-chronicle/filament/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/laravel-chronicle/filament/compare/1.0.0...1.1.0
