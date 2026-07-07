@@ -6,11 +6,14 @@ namespace Chronicle\Filament\Resources\ChronicleEntryResource\Pages;
 
 use Chronicle\Checkpoints\Checkpoint;
 use Chronicle\Entry\Entry;
+use Chronicle\Facades\Chronicle;
 use Chronicle\Filament\ChronicleFilamentPlugin;
+use Chronicle\Filament\Jobs\ComplianceReportJob;
 use Chronicle\Filament\Jobs\ExportLedgerJob;
 use Chronicle\Filament\Jobs\VerifyAnchorsJob;
 use Chronicle\Filament\Jobs\VerifyLedgerJob;
 use Chronicle\Filament\Resources\ChronicleEntryResource;
+use Chronicle\Filament\Support\ComplianceReportStore;
 use Chronicle\Filament\Support\ExportArtifactStore;
 use Chronicle\Filament\Support\SubjectErasureStore;
 use Chronicle\Filament\Support\VerificationResultStore;
@@ -18,11 +21,13 @@ use Chronicle\Filament\Widgets\AnchorCoverageWidget;
 use Chronicle\Filament\Widgets\CryptoShreddingWidget;
 use Chronicle\Filament\Widgets\SigningKeyRingWidget;
 use Chronicle\Filament\Widgets\VerificationHealthWidget;
+use Chronicle\Reports\ComplianceReport;
 use Chronicle\Verification\AnchorVerifier;
 use Chronicle\Verification\ExportVerifier;
 use Chronicle\Verification\IntegrityVerifier;
 use Chronicle\Verification\VerificationFailure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
@@ -31,6 +36,8 @@ use Filament\Widgets\Widget;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
@@ -197,6 +204,91 @@ class ListEntries extends ListRecords
                     // Egresses the full dataset - already gated on canExport().
                     return $store->disk()->download($latest->path, $latest->name);
                 }),
+            Action::make('complianceReport')
+                ->label('Compliance report')
+                ->icon('heroicon-o-document-check')
+                ->modalHeading('Generate a signed compliance report')
+                ->modalDescription('Produce a signed compliance report over a period (leave both dates blank to cover the whole ledger). The report summarises ledger integrity and coverage and is signed by the key ring; it egresses period-filtered ledger data, so it is gated like an export. Large periods run in the background - you will be notified when the signed report is ready.')
+                ->modalSubmitActionLabel('Generate report')
+                ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isReportingEnabled()
+                    && ChronicleFilamentPlugin::get()->canExport())
+                ->schema([
+                    DatePicker::make('from')
+                        ->label('From (inclusive)')
+                        ->native(false),
+                    DatePicker::make('to')
+                        ->label('To (inclusive)')
+                        ->native(false),
+                ])
+                ->action(function (array $data): ?Response {
+                    $from = isset($data['from']) && is_string($data['from']) && $data['from'] !== ''
+                        ? Carbon::parse($data['from'])->startOfDay()
+                        : null;
+                    $to = isset($data['to']) && is_string($data['to']) && $data['to'] !== ''
+                        ? Carbon::parse($data['to'])->endOfDay()
+                        : null;
+
+                    // Queue heavy reports; count the period's entries the same way core will.
+                    if ($this->periodEntryCount($from, $to) > ChronicleFilamentPlugin::get()->getExportsQueueThreshold()) {
+                        ComplianceReportJob::dispatch($from?->toIso8601String(), $to?->toIso8601String(), Auth::id());
+
+                        Notification::make()
+                            ->title('Report queued')
+                            ->body("The compliance report is running in the background; you'll be notified when the signed report is ready.")
+                            ->info()
+                            ->send();
+
+                        return null;
+                    }
+
+                    $tmp = (string) tempnam(sys_get_temp_dir(), 'chronicle-report-');
+
+                    try {
+                        $result = app(ComplianceReport::class)->generate($tmp, $from, $to);
+                    } finally {
+                        @unlink($tmp);
+                    }
+
+                    if ($result->isEmpty()) {
+                        Notification::make()
+                            ->title('Report covers no entries')
+                            ->body('No ledger entries fall in the selected period; nothing was generated.')
+                            ->warning()
+                            ->send();
+
+                        return null;
+                    }
+
+                    // Store the signed bundle for later download, then render the
+                    // report HTML inline so the browser displays it immediately.
+                    app(ComplianceReportStore::class)->store($result);
+
+                    return response($result->html, 200, ['Content-Type' => 'text/html']);
+                }),
+            Action::make('downloadLatestReport')
+                ->label('Download latest report')
+                ->icon('heroicon-o-arrow-down-on-square')
+                ->color('gray')
+                ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isReportingEnabled()
+                    && ChronicleFilamentPlugin::get()->canExport()
+                    && app(ComplianceReportStore::class)->latest() !== null)
+                ->action(function () {
+                    $store = app(ComplianceReportStore::class);
+                    $latest = $store->latest();
+
+                    if ($latest === null) {
+                        // TOCTOU guard: visible() already requires latest() !== null, so this
+                        // only fires if a bundle is deleted between render and click.
+                        // @codeCoverageIgnoreStart
+                        Notification::make()->title('No compliance reports yet')->info()->send();
+
+                        return null;
+                        // @codeCoverageIgnoreEnd
+                    }
+
+                    // Egresses period-filtered ledger data - already gated on canExport().
+                    return $store->disk()->download($latest->path, $latest->name);
+                }),
             Action::make('verifyChain')
                 ->label('Verify chain')
                 ->icon('heroicon-o-link')
@@ -299,6 +391,25 @@ class ListEntries extends ListRecords
         }
 
         return null;
+    }
+
+    /**
+     * Count the ledger entries a report over the given period will cover, matching
+     * core's ComplianceReport filtering (created_at >= from, <= to). Read-only.
+     */
+    protected function periodEntryCount(?Carbon $from, ?Carbon $to): int
+    {
+        $query = Chronicle::newEntryQuery();
+
+        if ($from !== null) {
+            $query->where('created_at', '>=', $from);
+        }
+
+        if ($to !== null) {
+            $query->where('created_at', '<=', $to);
+        }
+
+        return $query->count();
     }
 
     /**
