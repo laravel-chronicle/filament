@@ -45,6 +45,17 @@ it('stores a signed report and notifies the initiating user', function () {
         ->and(json_encode($user->notifications()->first()->data))->toContain('Report ready');
 });
 
+it('notes the covered period in the notification when a from/to window is set', function () {
+    $this->seedLedger(count: 4, checkpointEvery: 2);
+    $user = NotifiableUser::query()->create(['name' => 'Ada']);
+
+    (new ComplianceReportJob('2020-01-01T00:00:00+00:00', '2100-01-01T00:00:00+00:00', $user->getKey()))->handle();
+
+    expect($user->notifications()->count())->toBe(1)
+        ->and($user->notifications()->first()->data['body'])
+        ->toContain('2020-01-01 – 2100-01-01');
+});
+
 it('writes no ledger entry - report generation is read-only', function () {
     $this->seedLedger(count: 4, checkpointEvery: 2);
 
