@@ -16,8 +16,16 @@
   ],
   "homepage": "https://github.com/laravel-chronicle/filament",
   "support": {
-    "issues": "https://github.com/laravel-chronicle/filament/issues"
+      "email": "support@laravel-chronicle.dev",
+      "issues": "https://github.com/laravel-chronicle/filament/issues",
+      "docs": "https://laravel-chronicle.dev"
   },
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/ntoufoudis"
+    }
+  ],
   "authors": [
     {
       "name": "Vasileios Ntoufoudis",
@@ -29,6 +37,7 @@
     "ext-sodium": "*",
     "ext-openssl": "*",
     "ext-zip": "*",
+    "ext-intl": "*",
     "filament/filament": "^4.0||^5.0",
     "laravel-chronicle/core": "^1.13",
     "spatie/laravel-package-tools": "^1.16"

@@ -424,6 +424,15 @@ class ChronicleEntryResource extends Resource
                     ->icon('heroicon-o-shield-check')
                     ->visible(fn (Entry $record): bool => ChronicleFilamentPlugin::get()->canVerify($record))
                     ->action(function (Entry $record): void {
+                        // Re-check at execution: ->visible() hides the button, it does
+                        // not stop a crafted call. Mirror the visible() gate so
+                        // render-time and execution-time authorization can't disagree.
+                        if (! ChronicleFilamentPlugin::get()->canVerify($record)) {
+                            Notification::make()->title('Verification is not permitted')->danger()->send();
+
+                            return;
+                        }
+
                         $result = app(EntryVerifier::class)->verify($record->id);
                         app(VerificationResultStore::class)->recordEntry($record->id, $result);
 
@@ -448,6 +457,13 @@ class ChronicleEntryResource extends Resource
                         ->deselectRecordsAfterCompletion()
                         ->visible(fn (): bool => ChronicleFilamentPlugin::get()->canVerify())
                         ->action(function (Collection $records): void {
+                            // Re-check at execution: ->visible() only hides the button.
+                            if (! ChronicleFilamentPlugin::get()->canVerify()) {
+                                Notification::make()->title('Verification is not permitted')->danger()->send();
+
+                                return;
+                            }
+
                             $sequences = [];
 
                             foreach ($records as $record) {
@@ -705,6 +721,16 @@ class ChronicleEntryResource extends Resource
                 && $record->checkpoint_id !== null
                 && ChronicleFilamentPlugin::get()->canVerify($record))
             ->action(function (Entry $record): void {
+                // Re-check at execution: ->visible() hides the button, it does not
+                // stop a crafted call. Mirror the visible() gate's authorization
+                // (the anchoredness half is re-checked by the instanceof guard below).
+                if (! ChronicleFilamentPlugin::get()->isAnchoringEnabled()
+                    || ! ChronicleFilamentPlugin::get()->canVerify($record)) {
+                    Notification::make()->title('Anchor verification is not permitted')->danger()->send();
+
+                    return;
+                }
+
                 $checkpoint = $record->checkpoint;
 
                 if (! $checkpoint instanceof Checkpoint) {

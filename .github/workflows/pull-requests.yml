@@ -1,0 +1,12 @@
+name: pull requests
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  uneditable:
+    uses: laravel-chronicle/.github/.github/workflows/pull-requests.yml@b991ec9d7c2bdb9b179fd6600c0029ecb0edf02d # main

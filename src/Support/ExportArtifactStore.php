@@ -41,7 +41,10 @@ final class ExportArtifactStore
         $tmpZip = tempnam(sys_get_temp_dir(), 'chronicle-zip-');
 
         if ($tmpZip === false) {
-            // OS-level tempnam() failure; not reproducible in tests.
+            // Untestable without mocking the runtime: tempnam() falls back to the
+            // system temp dir when its dir argument is unwritable (verified), and
+            // that dir is not redirectable at runtime, so it returns false only on
+            // an OS-level temp-allocation failure a test cannot induce.
             // @codeCoverageIgnoreStart
             throw new RuntimeException('Unable to allocate a temporary file for the export bundle.');
             // @codeCoverageIgnoreEnd
@@ -50,7 +53,11 @@ final class ExportArtifactStore
         $zip = new ZipArchive;
 
         if ($zip->open($tmpZip, ZipArchive::OVERWRITE) !== true) {
-            // ZipArchive::open() failure on a freshly allocated temp file; not reproducible in tests.
+            // Untestable without mocking the runtime: $tmpZip is the freshly
+            // allocated, writable file from tempnam() above in the system temp dir
+            // (not redirectable at runtime), so opening it for OVERWRITE cannot be
+            // made to fail here - a non-writable exports disk never reaches this
+            // local call, it only affects disk()->put() below.
             // @codeCoverageIgnoreStart
             throw new RuntimeException('Unable to open the export bundle for writing.');
             // @codeCoverageIgnoreEnd
@@ -102,7 +109,10 @@ final class ExportArtifactStore
         $dir = sys_get_temp_dir().'/chronicle-verify-'.Str::uuid();
 
         if (! mkdir($dir, 0700, true) && ! is_dir($dir)) {
-            // OS-level mkdir() failure under a random temp path; not reproducible in tests.
+            // Untestable without mocking the runtime: $dir is a fresh uuid path
+            // under the writable system temp dir (not redirectable at runtime), so
+            // mkdir() always succeeds here and fails only on an OS-level fault a
+            // test cannot induce.
             // @codeCoverageIgnoreStart
             throw new RuntimeException('Unable to create a temporary directory for verification.');
             // @codeCoverageIgnoreEnd

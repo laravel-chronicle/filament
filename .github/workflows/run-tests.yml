@@ -7,6 +7,12 @@ on:
       - '.github/workflows/run-tests.yml'
       - 'phpunit.xml.dist'
       - 'composer.json'
+  pull_request:
+    paths:
+      - '**.php'
+      - '.github/workflows/run-tests.yml'
+      - 'phpunit.xml.dist'
+      - 'composer.json'
 
 permissions:
   contents: read

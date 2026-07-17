@@ -1,11 +1,25 @@
 # Changelog
 
-All notable changes to `laravel-chronicle/filament` will be documented in this file.
-
+All notable changes to `laravel-chronicle/filament` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+### Security
+
+- Execution-time authorization on every gated action (defense in depth). Filament's `->visible()` only hides a button - it does not stop a crafted request that invokes the action directly - so every gated action now **re-checks its own gate at the top of its `->action()` closure and refuses when denied**. This closes a gap where the per-row `verifyEntry` action and the `verifySegment` bulk action ran with no execution-time guard; the `verifyChain`, `verifyAllAnchors`, `exportLedger`, `verifyExport`, `downloadLatestExport`, `complianceReport`, and `downloadLatestReport` header actions now re-check the same gate their `->visible()` uses, matching the `eraseSubject` / `verifyAnchor` reference pattern (render-time and execution-time authorization can no longer disagree). On denial a notification is sent and no work is performed - nothing verified or recorded, no job dispatched, no bundle egressed. Purely additive: no behaviour change for authorized callers.
+
+### Changed
+
+- `composer.json` now requires `ext-intl` (alongside `ext-sodium` / `ext-openssl` / `ext-zip`), needed by the verification / test surface.
+- `composer.json` support metadata gains a support `email` and `docs` URL, plus a GitHub `funding` entry; the README gains status badges (Tests, PHPStan, Packagist version / downloads, license).
+
+### Internal
+
+- `ExecutionTimeGuardTest`: a self-enforcing behavioural sweep that, for every gated action, drives the real `->action()` closure with the gate forced off and asserts it denies at execution (denial notification + no side effect) - so "hidden button" and "denied execution" are proven as separate assertions - plus a structural tripwire pinning the registered action set so a newly added action cannot skip a denial test. Adds a focused `verifyEntry` defense-in-depth regression test.
+- `ExportArtifactStore`: replaced the three terse `@codeCoverageIgnore` comments on the temp-file / zip-open / temp-dir I/O failure paths with one-line justifications for why each is untestable without mocking the runtime (all allocate under the non-redirectable system temp dir). Comments only - no behaviour change.
+- CI / repo tooling: PHPStan and code-style now consume the shared `laravel-chronicle/.github` reusable workflows, the test workflow gains a `pull_request` trigger, and Dependabot auto-merge plus issue / pull-request automation workflows are added; the standalone `pint.yml` and `test-cover.yml` workflows and `.github/FUNDING.yml` are removed, `dependabot.yml` is refreshed, and a package-specific `CONTRIBUTING.md` is added.
 
 ---
 
