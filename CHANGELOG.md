@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [1.5.0] - 2026-07-17
+
 ### Security
 
 - Execution-time authorization on every gated action (defense in depth). Filament's `->visible()` only hides a button - it does not stop a crafted request that invokes the action directly - so every gated action now **re-checks its own gate at the top of its `->action()` closure and refuses when denied**. This closes a gap where the per-row `verifyEntry` action and the `verifySegment` bulk action ran with no execution-time guard; the `verifyChain`, `verifyAllAnchors`, `exportLedger`, `verifyExport`, `downloadLatestExport`, `complianceReport`, and `downloadLatestReport` header actions now re-check the same gate their `->visible()` uses, matching the `eraseSubject` / `verifyAnchor` reference pattern (render-time and execution-time authorization can no longer disagree). On denial a notification is sent and no work is performed - nothing verified or recorded, no job dispatched, no bundle egressed. Purely additive: no behaviour change for authorized callers.
@@ -159,7 +163,8 @@ surfaced as status badges and a health widget. The panel can never rewrite histo
 - README rewritten for v1.0: positioning lead (read-only, cannot rewrite history, the only Filament audit plugin with chain/entry/segment cryptographic verification), install + panel-registration snippet, full config reference (`entry_model`, navigation, slug, `verification.enabled`/`queue_threshold`/`store.connection`), compatibility matrix (PHP 8.2/8.4/8.5, Filament 4 & 5, Laravel 12 & 13, core 1.13+, `ext-sodium`/`ext-openssl` required), and screenshot placeholders.
 - Hardened the v1.0 test sweep: rendered-badge coverage for every stored status, a read-vs-verify separation guard, a `ViewEntry` no-header-action guard, and a confirmed-green gate (full Pest suite + PHPStan level 10 + Pint) across the CI matrix.
 
-[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.4.0...HEAD
+[Unreleased]: https://github.com/laravel-chronicle/filament/compare/1.5.0...HEAD
+[1.5.0]: https://github.com/laravel-chronicle/filament/compare/1.4.0...1.5.0
 [1.4.0]: https://github.com/laravel-chronicle/filament/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/laravel-chronicle/filament/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/laravel-chronicle/filament/compare/1.1.0...1.2.0
