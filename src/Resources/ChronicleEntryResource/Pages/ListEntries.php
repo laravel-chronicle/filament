@@ -110,6 +110,15 @@ class ListEntries extends ListRecords
                 ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isExportsEnabled()
                     && ChronicleFilamentPlugin::get()->canExport())
                 ->action(function (): void {
+                    // Re-check at execution: ->visible() hides the button, it does not
+                    // stop a crafted call. Mirror the visible() gate exactly.
+                    if (! ChronicleFilamentPlugin::get()->isExportsEnabled()
+                        || ! ChronicleFilamentPlugin::get()->canExport()) {
+                        Notification::make()->title('Export is not permitted')->danger()->send();
+
+                        return;
+                    }
+
                     // Exports are ALWAYS queued - never run in the request.
                     ExportLedgerJob::dispatch(Auth::id());
 
@@ -142,6 +151,14 @@ class ListEntries extends ListRecords
                         ->directory('chronicle-verify-uploads'),
                 ])
                 ->action(function (array $data): void {
+                    // Re-check at execution: ->visible() only hides the button.
+                    if (! ChronicleFilamentPlugin::get()->isExportsEnabled()
+                        || ! ChronicleFilamentPlugin::get()->canExport()) {
+                        Notification::make()->title('Export verification is not permitted')->danger()->send();
+
+                        return;
+                    }
+
                     $store = app(ExportArtifactStore::class);
 
                     $contents = $this->resolveBundleContents($store, $data);
@@ -188,6 +205,15 @@ class ListEntries extends ListRecords
                     && ChronicleFilamentPlugin::get()->canExport()
                     && app(ExportArtifactStore::class)->latest() !== null)
                 ->action(function () {
+                    // Re-check at execution: ->visible() hides the button, it does not
+                    // stop a crafted call. This action egresses the full dataset.
+                    if (! ChronicleFilamentPlugin::get()->isExportsEnabled()
+                        || ! ChronicleFilamentPlugin::get()->canExport()) {
+                        Notification::make()->title('Export is not permitted')->danger()->send();
+
+                        return null;
+                    }
+
                     $store = app(ExportArtifactStore::class);
                     $latest = $store->latest();
 
@@ -221,6 +247,15 @@ class ListEntries extends ListRecords
                         ->native(false),
                 ])
                 ->action(function (array $data): ?Response {
+                    // Re-check at execution: ->visible() only hides the button. This
+                    // action egresses period-filtered ledger data.
+                    if (! ChronicleFilamentPlugin::get()->isReportingEnabled()
+                        || ! ChronicleFilamentPlugin::get()->canExport()) {
+                        Notification::make()->title('Report generation is not permitted')->danger()->send();
+
+                        return null;
+                    }
+
                     $from = isset($data['from']) && is_string($data['from']) && $data['from'] !== ''
                         ? Carbon::parse($data['from'])->startOfDay()
                         : null;
@@ -273,6 +308,15 @@ class ListEntries extends ListRecords
                     && ChronicleFilamentPlugin::get()->canExport()
                     && app(ComplianceReportStore::class)->latest() !== null)
                 ->action(function () {
+                    // Re-check at execution: ->visible() hides the button, it does not
+                    // stop a crafted call. This action egresses period-filtered data.
+                    if (! ChronicleFilamentPlugin::get()->isReportingEnabled()
+                        || ! ChronicleFilamentPlugin::get()->canExport()) {
+                        Notification::make()->title('Report generation is not permitted')->danger()->send();
+
+                        return null;
+                    }
+
                     $store = app(ComplianceReportStore::class);
                     $latest = $store->latest();
 
@@ -295,6 +339,13 @@ class ListEntries extends ListRecords
                 ->requiresConfirmation()
                 ->visible(fn (): bool => ChronicleFilamentPlugin::get()->canVerify())
                 ->action(function (): void {
+                    // Re-check at execution: ->visible() only hides the button.
+                    if (! ChronicleFilamentPlugin::get()->canVerify()) {
+                        Notification::make()->title('Verification is not permitted')->danger()->send();
+
+                        return;
+                    }
+
                     /** @var class-string<Model> $model */
                     $model = ChronicleEntryResource::getModel();
                     $maxSequence = $model::query()->max('sequence');
@@ -330,6 +381,15 @@ class ListEntries extends ListRecords
                 ->visible(fn (): bool => ChronicleFilamentPlugin::get()->isAnchoringEnabled()
                     && ChronicleFilamentPlugin::get()->canVerify())
                 ->action(function (): void {
+                    // Re-check at execution: ->visible() hides the button, it does not
+                    // stop a crafted call. Mirror the visible() gate exactly.
+                    if (! ChronicleFilamentPlugin::get()->isAnchoringEnabled()
+                        || ! ChronicleFilamentPlugin::get()->canVerify()) {
+                        Notification::make()->title('Anchor verification is not permitted')->danger()->send();
+
+                        return;
+                    }
+
                     // In-scope = checkpoints carrying anchor rows (deliberate; never on render).
                     $checkpoints = Checkpoint::query()->has('anchors')->get();
                     $count = $checkpoints->count();

@@ -1,6 +1,12 @@
 # Chronicle for Filament
 
-A **read-only** Filament panel plugin for [`laravel-chronicle/core`](https://github.com/laravel-chronicle/core):
+[![Tests](https://github.com/laravel-chronicle/filament/actions/workflows/run-tests.yml/badge.svg)](https://github.com/laravel-chronicle/filament/actions/workflows/run-tests.yml)
+[![PHPStan](https://github.com/laravel-chronicle/filament/actions/workflows/phpstan.yml/badge.svg)](https://github.com/laravel-chronicle/filament/actions/workflows/phpstan.yml)
+[![Latest Version](https://img.shields.io/packagist/v/laravel-chronicle/filament.svg)](https://packagist.org/packages/laravel-chronicle/filament)
+[![Total Downloads](https://img.shields.io/packagist/dt/laravel-chronicle/filament.svg)](https://packagist.org/packages/laravel-chronicle/filament)
+[![License](https://img.shields.io/packagist/l/laravel-chronicle/filament.svg)](LICENSE)
+
+A **read-only** Filament panel plugin for [`laravel-chronicle/core`](https://github.com/laravel-chronicle/core): 
 browse your tamper-evident audit ledger and **cryptographically verify it - across the
 whole chain, a single entry, or a selected segment - without ever being able to rewrite
 history**. It is the only Filament audit plugin with cryptographic verification at chain,

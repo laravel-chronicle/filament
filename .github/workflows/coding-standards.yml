@@ -1,0 +1,15 @@
+name: Fix PHP Code Style Issues
+
+on:
+  push:
+    paths:
+      - '**.php'
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    uses: laravel-chronicle/.github/.github/workflows/coding-standards.yml@3099337de5c336278b9917ad854ea7145224c5cd # main
+    with:
+      fix: ${{ github.ref_name == 'main' }}

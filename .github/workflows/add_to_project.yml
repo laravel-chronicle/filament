@@ -1,11 +1,16 @@
 name: Add to project board
- 
+
 on:
   issues:
     types: [opened, reopened]
   pull_request_target:
     types: [opened, reopened]
- 
+
+# The add-to-project action authenticates with PROJECT_BOARD_TOKEN and uses the
+# issue/PR node id from the event payload, so the automatic GITHUB_TOKEN needs
+# no permissions of its own. Grant it none (least privilege).
+permissions: {}
+
 jobs:
   add-to-project:
     runs-on: ubuntu-latest
@@ -14,4 +19,4 @@ jobs:
         with:
           project-url: https://github.com/orgs/laravel-chronicle/projects/3
           github-token: ${{ secrets.PROJECT_BOARD_TOKEN }}
- 
+
